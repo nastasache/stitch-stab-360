@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>360° Interactive Route & Checkpoint Builder</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <!-- Leaflet CSS & JS — self-hosted, no CDN dependency -->
+    <link rel="stylesheet" href="js/leaflet/leaflet.css" />
+    <script src="js/leaflet/leaflet.js"></script>
+    <script src="js/route_utils.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --bg-panel: #1e293b;
+            --bg-card: #111827;
+            --accent: #38bdf8;
+            --accent-hover: #0284c7;
+            --border-color: rgba(255, 255, 255, 0.12);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        header {
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border-color);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 54px;
+            z-index: 1000;
+        }
+
+        .header-title {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-badge {
+            background: rgba(56, 189, 248, 0.15);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            color: var(--accent);
+            font-size: 12px;
+            padding: 3px 10px;
+            border-radius: 6px;
+            font-family: monospace;
+        }
+
+        .main-container {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+            position: relative;
+        }
+
+        #map {
+            flex: 1;
+            height: 100%;
+            width: 100%;
+            background: #090d16;
+        }
+
+        .sidebar {
+            width: 520px;
+            max-width: 50%;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            z-index: 500;
+        }
+
+        .sidebar-header {
+            padding: 12px 16px;
+            background: rgba(30, 41, 59, 0.8);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .sidebar-table-wrap {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11px;
+            color: #cbd5e1;
+        }
+
+        th {
+            background: rgba(15, 23, 42, 0.95);
+            padding: 8px 6px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-muted);
+            font-weight: 600;
+            z-index: 10;
+        }
+
+        td {
+            padding: 5px 4px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        tr:hover {
+            background: rgba(56, 189, 248, 0.08);
+        }
+
+        .table-input {
+            width: 100%;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 4px;
+            color: #f8fafc;
+            padding: 4px 6px;
+            font-size: 11.5px;
+            font-family: monospace;
+            box-sizing: border-box;
+        }
+        .table-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .btn-action {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+            color: #ffffff;
+            border: 1px solid rgba(56, 189, 248, 0.5);
+            box-shadow: 0 2px 10px rgba(2, 132, 199, 0.4);
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #e2e8f0;
+        }
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: #fca5a5;
+        }
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.25);
+        }
+
+        /* Leaflet Dark Theme Controls */
+        .leaflet-control-layers {
+            background: rgba(15, 23, 42, 0.92) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            border-radius: 8px !important;
+            color: #f8fafc !important;
+            font-size: 12px !important;
+            padding: 8px 12px !important;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.6) !important;
+            backdrop-filter: blur(8px);
+        }
+        .leaflet-control-layers label {
+            display: flex !important;
+            align-items: center !important;
+            gap: 8px !important;
+            margin-bottom: 4px !important;
+            cursor: pointer !important;
+            color: #e2e8f0 !important;
+            font-size: 12px !important;
+        }
+        .leaflet-control-layers input[type="radio"] {
+            accent-color: var(--accent) !important;
+            cursor: pointer !important;
+        }
+        .leaflet-bar a {
+            background: rgba(15, 23, 42, 0.92) !important;
+            border-color: rgba(255, 255, 255, 0.15) !important;
+            color: var(--accent) !important;
+        }
+        .leaflet-bar a:hover {
+            background: #1e293b !important;
+            color: #60a5fa !important;
+        }
+
+        .floating-toolbar {
+            position: absolute;
+            top: 20px;
+            left: 70px;
+            background: rgba(15, 23, 42, 0.92);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 6px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            z-index: 1000;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <div class="header-title">
+                <span>📍 Interactive Route & Checkpoint Builder</span>
+            </div>
+            <span id="lbl-video-name" class="header-badge" style="color: #facc15; border-color: rgba(250, 204, 21, 0.3); background: rgba(250, 204, 21, 0.1);">Video: -</span>
+            <span id="lbl-video-duration" class="header-badge">Duration: 120s</span>
+            <span id="lbl-stats" class="header-badge" style="color: #4ade80; border-color: rgba(74, 222, 128, 0.3); background: rgba(74, 222, 128, 0.1);">0 points | 0.0 m</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <button type="button" id="btn-undo" class="btn-action btn-secondary">↩️ Undo Last</button>
+            <button type="button" id="btn-clear" class="btn-action btn-danger">🗑️ Clear All</button>
+            <button type="button" id="btn-center" class="btn-action btn-secondary" style="color: #38bdf8;">🧭 Fit Path</button>
+            <button type="button" id="btn-save" class="btn-action btn-primary">💾 Apply & Sync to Project</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <!-- Floating Tool Instructions & Direction / Pace Controls -->
+        <div class="floating-toolbar" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <span style="font-size: 12px; color: #cbd5e1;">💡 <b>Click map</b> to add points. <b>Drag pins</b> to move.</span>
+            <div style="display: flex; align-items: center; gap: 6px; background: rgba(30,41,59,0.7); padding: 3px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);">
+                <span style="font-size: 11px; color: #cbd5e1; font-weight: 600;">Direction:</span>
+                <div style="display: flex; gap: 3px;" id="heading-presets">
+                    <button type="button" class="btn-action btn-secondary btn-heading-dir" data-heading="0" onclick="setHeading(0)" style="padding: 2px 7px; font-size: 11px;">⬆️ N</button>
+                    <button type="button" class="btn-action btn-secondary btn-heading-dir" data-heading="90" onclick="setHeading(90)" style="padding: 2px 7px; font-size: 11px;">➡️ E</button>
+                    <button type="button" class="btn-action btn-secondary btn-heading-dir" data-heading="180" onclick="setHeading(180)" style="padding: 2px 7px; font-size: 11px;">⬇️ S</button>
+                    <button type="button" class="btn-action btn-secondary btn-heading-dir" data-heading="270" onclick="setHeading(270)" style="padding: 2px 7px; font-size: 11px; font-weight: bold; background: rgba(56, 189, 248, 0.35); border-color: rgba(56, 189, 248, 0.8);">⬅️ W</button>
+                </div>
+                <input type="number" id="inp-heading" value="270" min="0" max="360" step="5" style="width: 58px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.25); border-radius: 4px; color: #38bdf8; font-size: 12px; font-weight: 600; padding: 2px 4px; text-align: center; font-family: monospace;">
+                <span style="font-size: 11px; color: #94a3b8; font-weight: 600;">°</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px; background: rgba(30,41,59,0.7); padding: 3px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);">
+                <span style="font-size: 11px; color: #cbd5e1; font-weight: 600;">Pace:</span>
+                <input type="number" id="inp-pace" value="1.15" min="0.5" max="3.0" step="0.05" style="width: 66px; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.25); border-radius: 4px; color: #facc15; font-size: 12px; font-weight: 600; padding: 2px 4px; text-align: center; font-family: monospace;">
+                <span style="font-size: 11px; color: #94a3b8; font-weight: 600;">m/s</span>
+            </div>
+        </div>
+
+        <!-- Fullscreen Map -->
+        <div id="map"></div>
+
+        <!-- Sidebar / Points Table -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <span>Checkpoints List (<span id="lbl-count">0</span>)</span>
+                <button type="button" id="btn-copy-text" class="btn-action btn-secondary" style="padding: 3px 8px; font-size: 11px;">📋 Copy Raw Text</button>
+            </div>
+
+            <!-- Quick Paste Input Bar -->
+            <div style="padding: 8px 12px; background: rgba(15, 23, 42, 0.9); border-bottom: 1px solid var(--border-color); display: flex; gap: 6px;">
+                <input type="text" id="inp-quick-coord" placeholder="Paste: 00:00:02, 40.782500, -73.968000[, 42]" style="flex: 1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #38bdf8; font-size: 11px; padding: 5px 8px; font-family: monospace;" title="Paste single or multiple coordinates with or without timestamps">
+                <button type="button" id="btn-quick-add" class="btn-action btn-primary" style="padding: 4px 10px; font-size: 11px; font-weight: 700; white-space: nowrap;">➕ Paste</button>
+            </div>
+
+            <div class="sidebar-table-wrap">
+                <table id="table-points">
+                    <thead>
+                        <tr>
+                            <th style="width: 26px; text-align: center;">#</th>
+                            <th style="width: 95px;">Time</th>
+                            <th>Latitude</th>
+                            <th>Longitude</th>
+                            <th style="width: 26px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-points">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+                <div id="empty-hint" style="padding: 40px 20px; text-align: center; color: #64748b; font-size: 12px;">
+                    No checkpoints placed yet.<br>Click anywhere on the satellite map along your path to begin!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let map = null;
+        let markers = [];
+        let polyline = null;
+        let points = [];
+        let videoDuration = 120;
+        let videoFile = '';
+        let directionLine = null;
+        let directionMarker = null;
+
+        // Parse query params
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('video')) {
+            videoFile = urlParams.get('video');
+            const lblName = document.getElementById('lbl-video-name');
+            if (lblName) lblName.textContent = `Video: ${videoFile}`;
+            
+            // Fetch precise video info from server
+            fetch(`api/v1/videos/info?input=${encodeURIComponent(videoFile)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.duration && data.duration > 0) {
+                        videoDuration = Math.round(data.duration);
+                        const lblDur = document.getElementById('lbl-video-duration');
+                        if (lblDur) lblDur.textContent = `Duration: ${videoDuration}s (${formatSecToHHMMSS(videoDuration)})`;
+                        recalcAndRender();
+                    }
+                })
+                .catch(() => {});
+        }
+
+        if (urlParams.has('duration')) {
+            videoDuration = parseFloat(urlParams.get('duration')) || 120;
+        }
+
+        // Core route and coordinate helper functions (formatSecToHHMMSS, parseHHMMSSToSec, createNumberedIcon,
+        // calculateBearing, getDestinationPoint, updateDirectionPresetButtons, parsePastedCoordinateString)
+        // are loaded from js/route_utils.js
+
+        function initMap() {
+            // Default center on Lacul Ștei
+            map = L.map('map', {
+                maxZoom: 22
+            }).setView([40.781200, -73.966500], 18);
+
+            const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxNativeZoom: 19,
+                maxZoom: 22,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
+            });
+
+            const esriSat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxNativeZoom: 18,
+                maxZoom: 22,
+                attribution: '© Esri, Maxar'
+            });
+
+            const googleSat = L.tileLayer('https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+                subdomains: ['0', '1', '2', '3'],
+                maxNativeZoom: 20,
+                maxZoom: 22,
+                attribution: '© Google Maps'
+            }).addTo(map);
+
+            const googleHybrid = L.tileLayer('https://mt{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+                subdomains: ['0', '1', '2', '3'],
+                maxNativeZoom: 20,
+                maxZoom: 22,
+                attribution: '© Google Maps'
+            });
+
+            const baseMaps = {
+                "Google Satellite (Ultra Zoom)": googleSat,
+                "Google Hybrid (Roads & Labels)": googleHybrid,
+                "Esri / Maxar Satellite": esriSat,
+                "OpenStreetMap (Standard)": osm
+            };
+
+            L.control.layers(baseMaps, null, { position: 'topright' }).addTo(map);
+
+            polyline = L.polyline([], { color: '#38bdf8', weight: 5, opacity: 0.9 }).addTo(map);
+
+            map.on('click', (e) => {
+                points.push({
+                    timeStr: '',
+                    sec: 0,
+                    hasCustomTime: false,
+                    lat: e.latlng.lat,
+                    lon: e.latlng.lng,
+                    ele: 315
+                });
+                recalcAndRender();
+            });
+
+            // Load initial points from localStorage if available
+            const stored = localStorage.getItem('streetview_checkpoints_transfer');
+            if (stored) {
+                parseTextToCheckpoints(stored);
+            }
+        }
+
+        function recalcAndRender() {
+            let totalDist = 0;
+            const cumDists = [0];
+
+            for (let i = 1; i < points.length; i++) {
+                const d = map.distance([points[i-1].lat, points[i-1].lon], [points[i].lat, points[i].lon]);
+                totalDist += d;
+                cumDists.push(totalDist);
+            }
+
+            for (let i = 0; i < points.length; i++) {
+                if (!points[i].hasCustomTime) {
+                    if (points.length === 1) {
+                        points[i].sec = 0;
+                    } else {
+                        const fraction = totalDist > 0 ? (cumDists[i] / totalDist) : (i / (points.length - 1));
+                        points[i].sec = Math.round(fraction * videoDuration);
+                    }
+                    points[i].timeStr = formatSecToHHMMSS(points[i].sec);
+                }
+            }
+
+            renderMarkers();
+            renderTable(totalDist);
+            renderDirectionArrow();
+        }
+
+        function renderMarkers() {
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+
+            const latlngs = [];
+            points.forEach((p, idx) => {
+                const isStart = (idx === 0);
+                const isEnd = (idx === points.length - 1 && points.length > 1);
+                const icon = createNumberedIcon(idx + 1, isStart, isEnd);
+
+                const marker = L.marker([p.lat, p.lon], {
+                    icon: icon,
+                    draggable: true,
+                    title: `Point ${idx + 1} (${p.timeStr})`
+                }).addTo(map);
+
+                marker.on('drag', (e) => {
+                    const pos = e.target.getLatLng();
+                    points[idx].lat = pos.lat;
+                    points[idx].lon = pos.lng;
+                    polyline.setLatLngs(points.map(pt => [pt.lat, pt.lon]));
+                });
+
+                marker.on('dragend', () => {
+                    recalcAndRender();
+                });
+
+                markers.push(marker);
+                latlngs.push([p.lat, p.lon]);
+            });
+
+            polyline.setLatLngs(latlngs);
+        }
+
+        function renderTable(totalDist) {
+            const tbody = document.getElementById('tbody-points');
+            const emptyHint = document.getElementById('empty-hint');
+            const lblCount = document.getElementById('lbl-count');
+            const lblStats = document.getElementById('lbl-stats');
+            const lblDur = document.getElementById('lbl-video-duration');
+
+            if (lblDur) lblDur.textContent = `Duration: ${Math.round(videoDuration)}s (${formatSecToHHMMSS(videoDuration)})`;
+            if (lblCount) lblCount.textContent = points.length;
+            if (lblStats) lblStats.textContent = `${points.length} points | ${totalDist.toFixed(1)} m`;
+
+            if (points.length === 0) {
+                tbody.innerHTML = '';
+                if (emptyHint) emptyHint.style.display = 'block';
+                return;
+            }
+            if (emptyHint) emptyHint.style.display = 'none';
+
+            let html = '';
+            points.forEach((p, idx) => {
+                html += `
+                    <tr>
+                        <td style="font-weight: 700; color: #38bdf8; text-align: center;">${idx + 1}</td>
+                        <td><input type="text" class="table-input" value="${p.timeStr}" placeholder="00:00:00" onchange="updatePoint(${idx}, 'time', this.value)" style="color: #facc15; text-align: center;"></td>
+                        <td><input type="number" step="0.000001" class="table-input" value="${p.lat.toFixed(6)}" onchange="updatePoint(${idx}, 'lat', this.value)"></td>
+                        <td><input type="number" step="0.000001" class="table-input" value="${p.lon.toFixed(6)}" onchange="updatePoint(${idx}, 'lon', this.value)"></td>
+                        <td style="text-align: center;"><button type="button" onclick="deletePoint(${idx})" style="background:none; border:none; color:#ef4444; font-size:14px; cursor:pointer;" title="Delete checkpoint">✕</button></td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+        }
+
+        window.updatePoint = function(idx, field, val) {
+            if (!points[idx]) return;
+            if (field === 'lat' || field === 'lon') {
+                const num = parseFloat(val);
+                if (!isNaN(num)) {
+                    points[idx][field] = num;
+                    recalcAndRender();
+                }
+            } else if (field === 'time') {
+                const trimmed = (val || '').trim();
+                if (trimmed === '') {
+                    points[idx].hasCustomTime = false;
+                } else {
+                    const sec = parseHHMMSSToSec(trimmed);
+                    points[idx].sec = sec;
+                    points[idx].timeStr = formatSecToHHMMSS(sec);
+                    points[idx].hasCustomTime = true;
+                }
+                recalcAndRender();
+            }
+        };
+
+        window.deletePoint = function(idx) {
+            points.splice(idx, 1);
+            recalcAndRender();
+        };
+
+        // Note: parsePastedCoordinateString, calculateBearing, getDestinationPoint, updateDirectionPresetButtons
+        // are provided globally by js/route_utils.js
+
+        function renderDirectionArrow() {
+            if (!map) return;
+
+            if (directionLine) {
+                map.removeLayer(directionLine);
+                directionLine = null;
+            }
+            if (directionMarker) {
+                map.removeLayer(directionMarker);
+                directionMarker = null;
+            }
+
+            if (points.length === 0) return;
+
+            const inpH = document.getElementById('inp-heading');
+            const p1 = points[0];
+
+            if (points.length >= 2) {
+                const p2 = points[1];
+                const autoBrng = calculateBearing(p1.lat, p1.lon, p2.lat, p2.lon);
+                if (inpH) inpH.value = Math.round(autoBrng);
+                updateDirectionPresetButtons(autoBrng);
+                return;
+            }
+
+            const currentHeading = parseFloat(inpH?.value || '270');
+            updateDirectionPresetButtons(currentHeading);
+            const dest = getDestinationPoint(p1.lat, p1.lon, currentHeading, 35);
+
+            directionLine = L.polyline([[p1.lat, p1.lon], dest], {
+                color: '#a855f7',
+                weight: 4,
+                dashArray: '6, 6',
+                opacity: 0.95
+            }).addTo(map);
+
+            const arrowIcon = L.divIcon({
+                html: `
+                    <div style="width: 28px; height: 28px; background: linear-gradient(135deg, #a855f7 0%, #7c3aed 100%); border: 2px solid #ffffff; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: bold; box-shadow: 0 4px 10px rgba(0,0,0,0.6); cursor: grab;" title="Drag to point walking direction!">
+                        ➤
+                    </div>
+                `,
+                className: 'custom-dir-arrow',
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+            });
+
+            directionMarker = L.marker(dest, {
+                icon: arrowIcon,
+                draggable: true,
+                title: 'Drag to point walking direction!'
+            }).addTo(map);
+
+            directionMarker.on('drag', (e) => {
+                const newPos = e.target.getLatLng();
+                const newBrng = calculateBearing(p1.lat, p1.lon, newPos.lat, newPos.lng);
+                if (inpH) inpH.value = Math.round(newBrng);
+                updateDirectionPresetButtons(newBrng);
+                if (directionLine) {
+                    directionLine.setLatLngs([[p1.lat, p1.lon], [newPos.lat, newPos.lng]]);
+                }
+            });
+
+            directionMarker.on('dragend', () => {
+                renderDirectionArrow();
+            });
+        }
+
+        window.setHeading = function(deg) {
+            const inpH = document.getElementById('inp-heading');
+            if (inpH) inpH.value = deg;
+            renderDirectionArrow();
+        };
+
+        const inpH = document.getElementById('inp-heading');
+        if (inpH) {
+            inpH.addEventListener('input', () => {
+                renderDirectionArrow();
+            });
+        }
+
+        function parseTextToCheckpoints(text) {
+            points = [];
+            if (!text) return;
+            const lines = text.split('\n');
+            let autoSec = 0;
+            lines.forEach(line => {
+                const pt = parsePastedCoordinateString(line);
+                if (pt) {
+                    if (pt.sec === 0 && !pt.hasCustomTime) pt.sec = autoSec;
+                    points.push(pt);
+                    autoSec += 10;
+                }
+            });
+            recalcAndRender();
+            if (points.length > 0) {
+                map.fitBounds(polyline.getBounds(), { padding: [40, 40] });
+            }
+        }
+
+        function handleQuickPaste() {
+            const inp = document.getElementById('inp-quick-coord');
+            if (!inp) return;
+            const val = inp.value.trim();
+            if (!val) return;
+
+            if (val.includes('\n')) {
+                parseTextToCheckpoints(val);
+                inp.value = '';
+                return;
+            }
+
+            const pt = parsePastedCoordinateString(val);
+            if (pt) {
+                points.push(pt);
+                recalcAndRender();
+                if (map) {
+                    map.setView([pt.lat, pt.lon], Math.max(map.getZoom(), 18));
+                }
+                inp.value = '';
+            } else {
+                alert('Could not recognize coordinates in pasted text. Please enter like: 00:00:02, 40.782500, -73.968000[, 42]');
+            }
+        }
+
+        const btnQuick = document.getElementById('btn-quick-add');
+        if (btnQuick) btnQuick.addEventListener('click', handleQuickPaste);
+
+        const inpQuick = document.getElementById('inp-quick-coord');
+        if (inpQuick) {
+            inpQuick.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleQuickPaste();
+                }
+            });
+        }
+
+        function getFormattedText() {
+            return points.map(p => `${p.timeStr}, ${p.lat.toFixed(8)}, ${p.lon.toFixed(8)}, ${Math.round(p.ele || 315)}`).join('\n');
+        }
+
+        document.getElementById('btn-undo').addEventListener('click', () => {
+            if (points.length > 0) {
+                points.pop();
+                recalcAndRender();
+            }
+        });
+
+        document.getElementById('btn-clear').addEventListener('click', () => {
+            if (confirm('Clear all checkpoints from the map?')) {
+                points = [];
+                recalcAndRender();
+            }
+        });
+
+        document.getElementById('btn-center').addEventListener('click', () => {
+            if (points.length > 0) {
+                map.fitBounds(polyline.getBounds(), { padding: [50, 50] });
+            }
+        });
+
+        document.getElementById('btn-copy-text').addEventListener('click', () => {
+            const txt = getFormattedText();
+            navigator.clipboard.writeText(txt).then(() => {
+                alert('Copied ' + points.length + ' checkpoints to clipboard!');
+            });
+        });
+
+        document.getElementById('btn-save').addEventListener('click', () => {
+            const txt = getFormattedText();
+            localStorage.setItem('streetview_checkpoints_result', txt);
+            
+            // If opened via window.open, pass directly to parent
+            if (window.opener && !window.opener.closed) {
+                try {
+                    window.opener.postMessage({ type: 'CHECKPOINTS_UPDATED', text: txt }, '*');
+                } catch(e) {}
+            }
+            alert('Saved! Applied ' + points.length + ' checkpoints to your project.');
+        });
+
+        window.addEventListener('DOMContentLoaded', initMap);
+    </script>
+</body>
+</html>

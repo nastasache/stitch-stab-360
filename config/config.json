@@ -1,0 +1,66 @@
+{
+  "server": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "max_body_bytes": 10485760,
+    "cors_origins": [
+      "http://127.0.0.1:8000",
+      "http://localhost:8000"
+    ],
+    "static_directories": [
+      "data",
+      "assets",
+      "samples",
+      "js",
+      "others"
+    ],
+    "allowed_extensions": {
+      "video": ["mp4", "mov", "mkv", "avi", "webm", "m4v", "insv"],
+      "image": ["png", "jpg", "jpeg", "webp"],
+      "gpx": ["gpx"]
+    }
+  },
+  "pipeline_defaults": {
+    "ih_fov": 190.0,
+    "iv_fov": 190.0,
+    "raw_rotation": 0,
+    "yaw": 0.0,
+    "pitch": 0.0,
+    "roll": 0.0,
+    "left_y_offset": 0.0,
+    "rear_roll_offset": 0.0,
+    "blend_width": 200,
+    "anti_vignette_angle": 0.785,
+    "ffmpeg_preset": "medium",
+    "ffmpeg_crf": 18,
+    "video_bitrate": "80M",
+    "streetview_bitrate": "45M",
+    "nadir_fov": 75.0,
+    "nadir_fov_v": 75.0,
+    "nadir_logo_default": "logo_stei_circle.png",
+    "stab_quality_mode": 4,
+    "vidstab_smoothing": 2,
+    "vidstab_shakiness": 1,
+    "vidstab_stepsize": 32,
+    "vidstab_optalgo": "gauss",
+    "kabsch_smoothing": 5,
+    "kopf_keyframe_sec": 2.0,
+    "kopf_cube_face": 1024,
+    "kopf_max_features": 400,
+    "telemetry_smoothing": 30,
+    "telemetry_ref_frame": 0,
+    "telemetry_mode": "smooth",
+    "telemetry_source": "auto",
+    "telemetry_multiplier": 1.0,
+    "telemetry_multiplier_roll": 1.0,
+    "telemetry_multiplier_pitch": 1.0,
+    "telemetry_multiplier_yaw": 1.0,
+    "telemetry_fusion": "mahony",
+    "telemetry_fusion_gain": 0.51,
+    "streetview_mode": "A",
+    "streetview_time_offset": 0.0,
+    "streetview_auto_pad": 1,
+    "streetview_smooth_gps": 1,
+    "streetview_strip_audio": 1
+  }
+}

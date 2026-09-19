@@ -1,0 +1,101 @@
+# Video & Media Files
+*.mp4
+*.MP4
+*.insv
+*.mov
+*.mkv
+*.avi
+*.webm
+
+# Telemetry & Motion Tracking
+*.trf
+*_sendcmd.txt
+*.gcsv
+*.gyroflow
+*.rotdata.csv
+*.gpdf
+*.bigsh0t360motion
+*.optical360motion
+
+# Log Files & Status
+*.log
+*.txt
+!Readme.txt
+!requirements.txt
+!requirements-dev.txt
+status.json
+
+# Scratch & Test Artifacts
+/test_*.py
+test_*.png
+test_*.jpg
+test_*.mp4
+/tests/temp/
+!/tests/
+!/tests/**
+
+# Editor & OS Files
+Thumbs.db
+desktop.ini
+.DS_Store
+/.idea/
+/.vscode/
+
+# Python Caches & Virtual Environments
+**/__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.tox/
+venv/
+.venv/
+env/
+
+# AI Memory & Assistant Indexes
+/.agents/*.db
+
+# Media & Workflow Directories (ignore all user-added media & presets by default)
+/data/input/videos/*
+!/data/input/videos/.gitkeep
+!/data/input/videos/test_fisheye.jpg
+!/data/input/videos/test_fisheye.mp4
+
+/data/input/nadir/*
+!/data/input/nadir/.gitkeep
+!/data/input/nadir/logo_generic.png
+
+/data/input/gps/*
+!/data/input/gps/.gitkeep
+!/data/input/gps/test_fisheye.gpx
+!/data/input/gps/test_fisheye.txt
+
+/data/input/presets/*
+!/data/input/presets/.gitkeep
+!/data/input/presets/default.json
+!/data/input/presets/default_all.json
+!/data/input/presets/default_none.json
+!/data/input/presets/test_fisheye.json
+!/data/input/presets/test_fisheye_photo.json
+/data/output/*
+!/data/output/.gitkeep
+/data/runtime/work/*
+!/data/runtime/work/.gitkeep
+/data/runtime/temp/*
+!/data/runtime/temp/.gitkeep
+/data/runtime/logs/*
+!/data/runtime/logs/.gitkeep
+/scratch/
+
+# System Config, Assets, & Calibration
+/config/*
+!/config/.gitkeep
+!/config/*.py
+!/config/*.json
+!/config/run_counter.txt
+!/assets/
+!/assets/**
+!/others/
+!/others/**

@@ -1,0 +1,43 @@
+# Virtual Environments
+venv/
+.venv/
+env/
+.env/
+
+# Version Control & IDE
+.git/
+.github/
+.idea/
+.vscode/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.tox/
+
+# AI Memory & assistant configs
+.agents/.git_rag.db
+.claude/
+.claudeignore
+.geminiignore
+
+# Test temp outputs
+tests/temp/
+
+# User video data and runtime processing buffers
+data/input/videos/*
+!data/input/videos/.gitkeep
+data/output/*
+!data/output/.gitkeep
+data/runtime/work/*
+!data/runtime/work/.gitkeep
+data/runtime/temp/*
+!data/runtime/temp/.gitkeep
+data/runtime/logs/*
+!data/runtime/logs/.gitkeep
+scratch/

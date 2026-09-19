@@ -1,0 +1,28 @@
+# Virtual Environments
+venv/
+.venv/
+env/
+.env/
+
+# Python Caches and Metadata
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.tox/
+tests/temp/
+
+# Databases and Checkpoints
+.ipynb_checkpoints/
+*.csv
+*.sqlite3
+*.db
+
+# Media & Runtime Buffers
+data/input/videos/
+data/output/
+data/runtime/
+scratch/

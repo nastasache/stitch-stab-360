@@ -1,0 +1,38 @@
+# Universal LF line endings for all text files across Windows, Linux, and macOS
+* text=auto eol=lf
+
+# Explicit source text types
+*.py text eol=lf
+*.js text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.txt text eol=lf
+*.sh text eol=lf
+*.bat text eol=lf
+*.cmd text eol=lf
+*.gpx text eol=lf
+*.gcsv text eol=lf
+
+# Explicit binary file types
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.mp4 binary
+*.MP4 binary
+*.insv binary
+*.pdf binary
+*.zip binary
+*.db binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# Run counter clean filter (forces committed blob to strictly 1000 on Git/GitHub)
+config/run_counter.txt text eol=lf filter=counter-reset
+

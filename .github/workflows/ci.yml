@@ -1,0 +1,44 @@
+name: CI Test Suite
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  test:
+    name: Test Suite (Windows)
+    runs-on: windows-latest
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install FFmpeg
+        run: |
+          choco install ffmpeg --no-progress
+          echo "C:\ProgramData\chocolatey\bin" >> $env:GITHUB_PATH
+
+      - name: Verify FFmpeg and FFprobe
+        run: |
+          ffmpeg -version
+          ffprobe -version
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -B -m pip install --upgrade pip
+          python -B -m pip install -r requirements.txt
+          python -B -m pip install -r requirements-dev.txt
+
+      - name: Run Test Suite
+        run: |
+          python -B -m unittest discover -s tests -p "test_*.py" -v

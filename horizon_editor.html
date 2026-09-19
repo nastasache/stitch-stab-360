@@ -1,0 +1,4168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>360° Horizon Leveling & Alignment Studio</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/js/three/three.module.js",
+        "three/addons/": "/js/three/"
+      }
+    }
+  </script>
+  <style>
+    :root {
+      --bg-dark: #121418;
+      --bg-panel: #1a1d24;
+      --bg-card: #232732;
+      --accent: #00d2ff;
+      --accent-hover: #00b4db;
+      --accent-active: #ff0055;
+      --text-main: #e2e8f0;
+      --text-muted: #94a3b8;
+      --border-color: #334155;
+      --checkpoint-color: #f59e0b;
+      --danger: #ef4444;
+      --success: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    input, textarea {
+      user-select: auto;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 13px;
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background-color: var(--bg-panel);
+      border-bottom: 1px solid var(--border-color);
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 48px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: 0.5px;
+    }
+
+    .brand-tag {
+      font-size: 10px;
+      background: rgba(0, 210, 255, 0.15);
+      border: 1px solid var(--accent);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    button, .btn {
+      background: var(--bg-card);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    button:hover, .btn:hover {
+      background: #2e3442;
+      border-color: var(--accent);
+      color: #fff;
+    }
+
+    button.btn-primary {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    button.btn-primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    button.btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+
+    button.btn-danger:hover {
+      background: var(--danger);
+      color: #fff;
+    }
+
+    button.active {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    .main-workspace {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .viewport-container {
+      flex: 1;
+      position: relative;
+      background: #000;
+      overflow: hidden;
+    }
+
+    #webglCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+
+    #webglCanvas:active {
+      cursor: grabbing;
+    }
+
+    #webglCanvas.draw-mode {
+      cursor: crosshair;
+    }
+
+    .viewport-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .horizon-line {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 100%;
+      height: 1px;
+      background: rgba(16, 185, 129, 0.9);
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+      transform: translateY(-50%);
+      pointer-events: none;
+      display: none;
+    }
+
+    .horizon-line::after {
+      content: "LEVEL HORIZON";
+      position: absolute;
+      right: 12px;
+      top: -16px;
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--success);
+      letter-spacing: 1px;
+    }
+
+    .vertical-center-line {
+      position: absolute;
+      left: 50%;
+      top: 0;
+      width: 1px;
+      height: 100%;
+      background: rgba(16, 185, 129, 0.9);
+      box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+      transform: translateX(-50%);
+      pointer-events: none;
+      display: none;
+    }
+
+    .center-crosshair {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 24px;
+      height: 24px;
+      border: 1px solid rgba(0, 210, 255, 0.6);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      display: none;
+    }
+
+    .center-crosshair::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: -8px;
+      right: -8px;
+      height: 1px;
+      background: rgba(0, 210, 255, 0.6);
+    }
+
+    .center-crosshair::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: -8px;
+      bottom: -8px;
+      width: 1px;
+      background: rgba(0, 210, 255, 0.6);
+    }
+
+    .viewport-hud {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(18, 20, 24, 0.85);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-family: monospace;
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      pointer-events: auto;
+      z-index: 20;
+    }
+
+    .hud-row button {
+      pointer-events: auto;
+      cursor: pointer;
+    }
+
+    #btnRecenterView:hover {
+      background: #0ea5e9 !important;
+      filter: brightness(1.15);
+      transform: scale(1.04);
+    }
+
+    #hudViewYaw:hover {
+      color: var(--accent) !important;
+      text-decoration: underline;
+    }
+
+    .viewport-hint {
+      position: absolute;
+      bottom: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(18, 20, 24, 0.85);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 4px 14px;
+      font-size: 11px;
+      color: var(--text-muted);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      pointer-events: none;
+      z-index: 15;
+      white-space: nowrap;
+      user-select: none;
+    }
+
+    .viewport-hint b {
+      color: var(--text-main);
+    }
+
+    .hud-row {
+      display: flex;
+      gap: 12px;
+      justify-content: space-between;
+    }
+
+    .hud-val {
+      font-weight: bold;
+      color: var(--accent);
+    }
+
+    .hud-checkpoint {
+      color: var(--checkpoint-color);
+      font-weight: bold;
+    }
+
+    #drawCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    .sidebar {
+      width: 320px;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .sidebar-section {
+      padding: 14px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .sidebar-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .control-group {
+      margin-bottom: 12px;
+    }
+
+    .control-group.disabled-control .control-slider-box {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .control-group.disabled-control input {
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .control-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+      font-size: 11px;
+      color: var(--text-main);
+    }
+
+    .control-slider-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      height: 4px;
+      background: var(--bg-card);
+      border-radius: 2px;
+      outline: none;
+      -webkit-appearance: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    input[type="number"], input[type="text"] {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      width: 76px;
+      text-align: center;
+      font-family: monospace;
+    }
+
+    input[type="number"]:focus, input[type="text"]:focus {
+      border-color: var(--accent);
+      outline: none;
+    }
+
+    .stepper-wrap {
+      display: inline-flex;
+      align-items: stretch;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      overflow: hidden;
+      height: 32px;
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+
+    .stepper-wrap:focus-within {
+      border-color: var(--accent);
+    }
+
+    .stepper-wrap input[type="number"] {
+      width: 54px;
+      height: 100%;
+      background: transparent;
+      border: none !important;
+      color: var(--text-main);
+      font-size: 13px;
+      font-weight: 700;
+      padding: 0 4px 0 8px;
+      text-align: left;
+      font-family: monospace;
+      outline: none;
+      -moz-appearance: textfield;
+      box-shadow: none;
+    }
+
+    .stepper-wrap input[type="number"]::-webkit-inner-spin-button,
+    .stepper-wrap input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    .stepper-buttons {
+      display: flex;
+      flex-direction: column;
+      width: 28px;
+      border-left: 1px solid var(--border-color);
+      background: #1e2430;
+    }
+
+    .stepper-btn {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #232936;
+      color: #94a3b8;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      padding: 0;
+      user-select: none;
+      transition: background 0.12s, color 0.12s;
+    }
+
+    .stepper-btn:hover {
+      background: #38bdf8;
+      color: #0f172a;
+    }
+
+    .stepper-btn:active {
+      background: #0284c7;
+      color: #ffffff;
+    }
+
+    .stepper-btn.stepper-up {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    }
+
+    .control-group.disabled-control .stepper-wrap {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 12px;
+    }
+
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 34px;
+      height: 18px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: var(--bg-card);
+      transition: .2s;
+      border-radius: 18px;
+      border: 1px solid var(--border-color);
+    }
+
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 12px;
+      width: 12px;
+      left: 2px;
+      bottom: 2px;
+      background-color: var(--text-muted);
+      transition: .2s;
+      border-radius: 50%;
+    }
+
+    input:checked + .toggle-slider {
+      background-color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    input:checked + .toggle-slider:before {
+      transform: translateX(16px);
+      background-color: #000;
+    }
+
+    .checkpoint-table-container {
+      overflow-y: auto;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      max-height: 160px;
+    }
+
+    .checkpoint-table-container::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .checkpoint-table-container::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.6);
+    }
+
+    .checkpoint-table-container::-webkit-scrollbar-thumb {
+      background: var(--accent);
+      border-radius: 3px;
+    }
+
+    .checkpoint-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      text-align: left;
+    }
+
+    .checkpoint-table th {
+      background: #1e222b;
+      padding: 6px 8px;
+      color: var(--text-muted);
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .checkpoint-table td {
+      padding: 5px 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      font-family: monospace;
+    }
+
+    .checkpoint-table tr:hover {
+      background: rgba(0, 210, 255, 0.08);
+      cursor: pointer;
+    }
+
+    .checkpoint-table tr.active-row {
+      background: rgba(245, 158, 11, 0.15);
+      border-left: 2px solid var(--checkpoint-color);
+    }
+
+    .table-btn {
+      padding: 2px 5px;
+      font-size: 10px;
+    }
+
+    .bottom-bar {
+      background: var(--bg-panel);
+      border-top: 1px solid var(--border-color);
+      padding: 10px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .timeline-container {
+      position: relative;
+      height: 28px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+
+    .timeline-progress {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      background: rgba(0, 210, 255, 0.2);
+      pointer-events: none;
+      width: 0%;
+    }
+
+    .timeline-playhead {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--accent);
+      box-shadow: 0 0 6px var(--accent);
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+
+    .timeline-keyframe {
+      position: absolute;
+      top: 50%;
+      width: 10px;
+      height: 10px;
+      background: var(--checkpoint-color);
+      transform: translate(-50%, -50%) rotate(45deg);
+      border: 1px solid #fff;
+      cursor: pointer;
+      z-index: 5;
+      box-shadow: 0 0 4px rgba(0,0,0,0.5);
+    }
+
+    .timeline-keyframe:hover {
+      transform: translate(-50%, -50%) rotate(45deg) scale(1.3);
+    }
+
+    .transport-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .transport-left, .transport-center, .transport-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .timecode-display {
+      font-family: monospace;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-main);
+      padding: 4px 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+    }
+
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+
+    .modal-box {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      width: 540px;
+      max-width: 90vw;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .modal-header {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--accent);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .modal-body textarea {
+      width: 100%;
+      height: 180px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      color: #fff;
+      font-family: monospace;
+      font-size: 11px;
+      padding: 8px;
+      border-radius: 4px;
+      resize: vertical;
+    }
+
+    .modal-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Hidden Video Element -->
+  <video id="videoElement" crossOrigin="anonymous" playsinline style="display:none;"></video>
+  <input type="file" id="videoFileInput" accept="video/mp4,video/webm,video/ogg">
+  <input type="file" id="jsonFileInput" accept=".json">
+
+  <!-- Header -->
+  <header>
+    <div class="brand">
+      <span>360° HORIZON STABILIZER</span>
+      <span class="brand-tag">Horizon Studio</span>
+    </div>
+    <div class="header-actions">
+      <button id="btnOpenVideo" class="btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+        Open 360 Video
+      </button>
+      <button id="btnImportJson" class="btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+        Import Checkpoints
+      </button>
+      <button id="btnExportJson" class="btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+        Export Checkpoints
+      </button>
+      <button id="btnSaveWork" class="btn btn-primary" style="background:#10b981; border-color:#10b981; color:#fff;" title="Save checkpoints to /work folder">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+        Save to Work Folder
+      </button>
+    </div>
+  </header>
+
+  <!-- Workspace -->
+  <div class="main-workspace">
+    <!-- Viewport -->
+    <div class="viewport-container" id="viewportContainer">
+      <canvas id="webglCanvas"></canvas>
+      <canvas id="drawCanvas"></canvas>
+
+      <div class="viewport-overlay">
+        <div class="horizon-line" id="horizonLine"></div>
+        <div class="vertical-center-line" id="verticalCenterLine"></div>
+        <div class="center-crosshair" id="centerCrosshair"></div>
+      </div>
+
+      <div class="viewport-hud">
+        <div class="hud-row"><span>Frame:</span><span class="hud-val" id="hudFrame">0 / 0</span></div>
+        <div class="hud-row"><span>Time:</span><span class="hud-val" id="hudTime">00:00.000</span></div>
+        <div class="hud-row"><span>Horizon Level (P, R):</span><span class="hud-val" id="hudAngles">0.0°, 0.0°</span></div>
+        <div class="hud-row" style="align-items:center;">
+          <span>View Pan (Yaw):</span>
+          <span class="hud-val" id="hudViewYaw" style="color:var(--text-muted); cursor:pointer; pointer-events:auto;" title="Click to recenter to 0.0° forward">0.0°</span>
+          <button id="btnRecenterView" class="table-btn" style="display:none; padding:2px 8px; font-size:11px; font-weight:600; margin-left:6px; background:#0284c7; color:#fff; border-radius:3px; cursor:pointer; pointer-events:auto; z-index:25;" title="Recenter view to 0.0° forward">🎯 Center (0°)</button>
+        </div>
+        <div class="hud-row"><span>Status:</span><span id="hudStatus" class="hud-val">Ready</span></div>
+      </div>
+
+      <!-- Viewport Navigation Hint -->
+      <div class="viewport-hint">
+        <span>🖱️ <b>Left-Drag:</b> Tilt Pitch</span>
+        <span style="opacity:0.35;">|</span>
+        <span>🔄 <b>Right-Drag</b> / <b>Alt / Shift + Drag:</b> 360° Orbit</span>
+        <span style="opacity:0.35;">|</span>
+        <span>🎯 <b>[Center (0°)]:</b> Forward</span>
+        <span style="opacity:0.35;">|</span>
+        <span>⚡ <b>[ / ]:</b> Speed</span>
+        <span style="opacity:0.35;">|</span>
+        <span>🔍 <b>Wheel:</b> Zoom</span>
+      </div>
+    </div>
+
+    <!-- Sidebar Controls -->
+    <div class="sidebar">
+      <!-- Smart Horizon Alignment Tools -->
+      <div class="sidebar-section">
+        <div class="sidebar-title">Smart Horizon Tools</div>
+
+        <button id="btnAutoDetectSidebar" class="btn" style="width:100%; margin-bottom:8px; background:rgba(56, 189, 248, 0.12); border-color:#38bdf8; color:#38bdf8;" title="Generate checkpoints using Cadence Presets, Pitch Extrema, or Sensor/Vision AI">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          ⚡ Auto-Detect &amp; Cadence
+        </button>
+
+        <button id="btnTwoPointTool" class="btn" style="width:100%; margin-bottom:10px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><circle cx="5" cy="12" r="3"></circle><circle cx="19" cy="12" r="3"></circle></svg>
+          2-Point Horizon Snap Tool
+        </button>
+
+        <div class="control-group" style="margin-bottom:10px;">
+          <div class="control-label"><span>Field of View (FOV)</span></div>
+          <div class="control-slider-box">
+            <input type="range" id="sliderFov" min="30" max="120" step="1" value="75">
+            <div class="stepper-wrap">
+              <input type="number" id="numFov" min="30" max="120" step="1" value="75">
+              <div class="stepper-buttons">
+                <button type="button" class="stepper-btn stepper-up" title="Increase FOV (+1°)">
+                  <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M5 0L10 6H0z"/></svg>
+                </button>
+                <button type="button" class="stepper-btn stepper-down" title="Decrease FOV (-1°)">
+                  <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M5 6L0 0h10z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="toggle-row" id="rowIgnoreYaw" style="background:rgba(0, 210, 255, 0.08); padding:4px 6px; border-radius:4px;">
+          <span id="lblIgnoreYaw" style="font-weight:600; color:var(--accent);">Ignore Yaw (Pitch &amp; Roll Level Only)</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkIgnoreYaw" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <span>Show Level Horizon Guide</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkHorizonGuide" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <span>Show 360° Spherical Grid</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkSphereGrid" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <span>Show Center Reticle</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkCenterCrosshair" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+
+        <div class="toggle-row">
+          <span>Apply Trajectory Preview</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="chkLiveTrajectory" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Horizon Parameters & Audit Section -->
+      <div class="sidebar-section" id="sectionHorizonParams" style="background:rgba(15,23,42,0.45); border:1px solid rgba(56,189,248,0.2); border-radius:6px; padding:10px; margin-bottom:10px;">
+        <div class="sidebar-title" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-size:12px; font-weight:700; color:#38bdf8; display:flex; align-items:center; gap:5px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+            Active Parameters
+          </span>
+          <span id="paramBadgeSource" style="font-size:10px; background:#0284c7; color:#fff; padding:1px 6px; border-radius:10px; font-weight:600; text-transform:uppercase;">Manual</span>
+        </div>
+
+        <div id="paramDetailsBox" style="font-size:11px; line-height:1.55; color:var(--text-main);">
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Strategy:</span> <b id="lblParamStrategy" style="color:var(--text-main);">Manual Snap / Default</b></div>
+          <div id="rowParamDensity" style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Density / Tol:</span> <span id="lblParamDensity">Balanced (ε=2.5°)</span></div>
+          <div id="rowParamOpticalTarget" style="display:none; justify-content:space-between;"><span style="color:var(--text-muted);">Optical Target:</span> <span id="lblParamOpticalTarget">Ground / Road Base</span></div>
+          <div id="rowParamProminenceDamp" style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Prominence / Damp:</span> <span><span id="lblParamProminence">0.8°</span> / <span id="lblParamRollDamp">0.70x</span></span></div>
+          <div id="rowParamBaseline" style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Baseline (P / R):</span> <span><span id="lblParamBaselinePitch">0.0°</span> / <span id="lblParamBaselineRoll">0.0°</span></span></div>
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Range:</span> <span id="lblParamRange">Full Video</span></div>
+          <div style="display:flex; justify-content:space-between;"><span style="color:var(--text-muted);">Keyframes:</span> <span id="lblParamCount" style="color:var(--accent); font-weight:600;">0 keyframes</span></div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:5px; padding-top:4px; border-top:1px solid rgba(255,255,255,0.06);">
+            <span style="color:var(--text-muted); font-size:10px;">Log File:</span>
+            <span id="lblParamLogFile" style="font-family:monospace; font-size:10px; color:#38bdf8; overflow:hidden; text-overflow:ellipsis; max-width:140px; white-space:nowrap;" title="data/runtime/work/horizon_params.log">-</span>
+          </div>
+        </div>
+
+        <button id="btnViewParamLog" class="btn" style="width:100%; margin-top:6px; padding:4px 8px; font-size:11px; font-weight:600; justify-content:center; background:#1e293b; border:1px solid var(--border-color); color:var(--text-main);" title="Inspect full horizon parameter audit log">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+          📋 View Parameters Log
+        </button>
+      </div>
+
+      <!-- Checkpoint Management & Leveling -->
+      <div class="sidebar-section" style="flex:1; display:flex; flex-direction:column;">
+        <div class="sidebar-title">
+          <span>Horizon Checkpoints</span>
+          <span id="checkpointCount" style="color:var(--checkpoint-color);">0 Keyframes</span>
+        </div>
+
+        <!-- Checkpoint Actions: Reset 0°, Delete, Clear All -->
+        <div style="display:flex; gap:6px; margin-bottom:8px;">
+          <button id="btnResetCheckpointsToZero" class="btn btn-danger" style="flex:1; justify-content:center; font-size:11px; font-weight:600; padding:6px 2px; white-space:nowrap;" title="Reset all existing checkpoint angles to 0.0° level">
+            Reset 0°
+          </button>
+          <button id="btnDeleteCheckpoint" class="btn btn-danger" style="flex:1; justify-content:center; font-size:11px; font-weight:600; padding:6px 2px; white-space:nowrap;" title="Delete checkpoint at current frame">
+            Delete
+          </button>
+          <button id="btnClearAllCheckpoints" class="btn btn-danger" style="flex:1; justify-content:center; font-size:11px; font-weight:600; padding:6px 2px; white-space:nowrap;" title="Remove all checkpoints">
+            Clear All
+          </button>
+        </div>
+
+        <!-- Checkpoints List Table before Set Checkpoint -->
+        <div class="checkpoint-table-container" style="max-height:160px; overflow-y:auto; margin-bottom:8px;">
+          <table class="checkpoint-table">
+            <thead>
+              <tr>
+                <th>Frame</th>
+                <th>Pitch</th>
+                <th>Roll</th>
+                <th>Yaw</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="checkpointTableBody">
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Keyframe Angles & Actions: Positioned right below checkpoints list table -->
+        <div class="keyframe-angles-bottom-container" style="margin-top:4px; padding-top:8px; border-top:1px solid var(--border-color);">
+          <div class="sidebar-title" style="margin-top:2px; margin-bottom:6px;">
+            <span>Keyframe Angles</span>
+            <button id="btnResetAngles" class="table-btn" title="Reset angles to 0.0°">Reset</button>
+          </div>
+
+          <!-- 1. Yaw Heading -->
+          <div class="control-group disabled-control" id="yawControlGroup">
+            <div class="control-label"><span id="lblYawHeading" style="color:var(--text-muted);">Yaw Heading</span></div>
+            <div class="control-slider-box">
+              <input type="range" id="sliderYaw" min="-180" max="180" step="0.1" value="0" disabled>
+              <div class="stepper-wrap">
+                <input type="number" id="numYaw" min="-180" max="180" step="0.1" value="0.0" disabled>
+                <div class="stepper-buttons">
+                  <button type="button" class="stepper-btn stepper-up" title="Increase yaw (+0.1°)">
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M5 0L10 6H0z"/></svg>
+                  </button>
+                  <button type="button" class="stepper-btn stepper-down" title="Decrease yaw (-0.1°)">
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M5 6L0 0h10z"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. Roll (Horizon Level) -->
+          <div class="control-group">
+            <div class="control-label"><span>Roll (Horizon Level)</span></div>
+            <div class="control-slider-box">
+              <input type="range" id="sliderRoll" min="-180" max="180" step="0.1" value="0">
+              <div class="stepper-wrap">
+                <input type="number" id="numRoll" min="-180" max="180" step="0.1" value="0.0">
+                <div class="stepper-buttons">
+                  <button type="button" class="stepper-btn stepper-up" title="Increase roll (+0.1°)">
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M5 0L10 6H0z"/></svg>
+                  </button>
+                  <button type="button" class="stepper-btn stepper-down" title="Decrease roll (-0.1°)">
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M5 6L0 0h10z"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. Pitch (Elevation Tilt) -->
+          <div class="control-group">
+            <div class="control-label"><span>Pitch (Elevation Tilt)</span></div>
+            <div class="control-slider-box">
+              <input type="range" id="sliderPitch" min="-90" max="90" step="0.1" value="0">
+              <div class="stepper-wrap">
+                <input type="number" id="numPitch" min="-90" max="90" step="0.1" value="0.0">
+                <div class="stepper-buttons">
+                  <button type="button" class="stepper-btn stepper-up" title="Increase pitch (+0.1°)">
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M5 0L10 6H0z"/></svg>
+                  </button>
+                  <button type="button" class="stepper-btn stepper-down" title="Decrease pitch (-0.1°)">
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="currentColor"><path d="M5 6L0 0h10z"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions: Set Checkpoint & Next Checkpoint directly below Pitch -->
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button id="btnAddCheckpoint" class="btn btn-primary" style="flex:1; padding:8px 10px; font-weight:700; justify-content:center; white-space:nowrap;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+              Set Checkpoint
+            </button>
+            <button id="btnNextCheckpointSidebar" class="btn" style="padding:8px 12px; font-weight:700; justify-content:center; white-space:nowrap; background:#1e293b; border:1px solid var(--accent); color:var(--accent);" title="Jump to next checkpoint (K)">
+              Next Checkpoint &gt;
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom Transport Bar -->
+  <div class="bottom-bar">
+    <div class="timeline-container" id="timelineContainer">
+      <div class="timeline-progress" id="timelineProgress"></div>
+      <div class="timeline-playhead" id="timelinePlayhead"></div>
+      <div id="timelineKeyframes"></div>
+    </div>
+
+    <div class="transport-controls">
+      <div class="transport-left">
+        <button id="btnFirstFrame" title="First Frame (Home)">|&lt;&lt;</button>
+        <button id="btnStepBack1" title="Step -1 Frame">&lt;</button>
+        <button id="btnPlayPause" class="btn-primary" title="Play/Pause (Space)">Play</button>
+        <button id="btnStepFwd1" title="Step +1 Frame">&gt;</button>
+        <button id="btnLastFrame" title="Last Frame (End)">&gt;&gt;|</button>
+
+        <div style="display:flex; align-items:center; gap:4px; margin-left:8px; background:rgba(30,41,59,0.5); padding:2px 6px; border-radius:4px; border:1px solid var(--border-color);">
+          <span style="font-size:11px; color:var(--text-muted); font-weight:600;">Speed:</span>
+          <select id="selPlaybackRate" style="background:#0f172a; color:var(--accent); border:1px solid rgba(56,189,248,0.3); border-radius:3px; padding:2px 4px; font-size:11px; font-weight:bold; cursor:pointer;" title="Playback Speed ([ to slow down, ] to speed up)">
+            <option value="0.1">0.10x (Super Slow)</option>
+            <option value="0.25">0.25x (Quarter)</option>
+            <option value="0.5">0.50x (Half)</option>
+            <option value="0.75">0.75x (Slow)</option>
+            <option value="1" selected>1.00x (Normal)</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.50x</option>
+            <option value="2">2.00x</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="transport-center">
+        <div class="timecode-display" id="timecodeDisplay">00:00.000 / 00:00.000</div>
+        <div style="display:flex; align-items:center; gap:4px;">
+          <span>Frame:</span>
+          <input type="number" id="inputFrame" value="0" min="0" style="width:70px;">
+        </div>
+        <div style="display:flex; align-items:center; gap:4px;">
+          <span>FPS:</span>
+          <input type="number" id="inputFps" value="29.97" step="0.01" style="width:65px;">
+        </div>
+      </div>
+
+      <div class="transport-right" style="display:flex; align-items:center; gap:6px;">
+        <button id="btnPrevCheckpoint" title="Jump to previous checkpoint (J)">&lt; Checkpoint</button>
+        <span id="checkpointNavigatorStatus" style="font-size:11px; font-weight:700; color:var(--checkpoint-color); white-space:nowrap; padding:2px 6px; min-width:65px; text-align:center;">
+          - / 0
+        </span>
+        <button id="btnNextCheckpoint" title="Jump to next checkpoint (K)">Checkpoint &gt;</button>
+        <div style="display:flex; align-items:center; gap:4px; margin-left:6px; border-left:1px solid var(--border-color); padding-left:8px;">
+          <span style="font-size:11px; color:var(--text-muted); white-space:nowrap;">Go to CP #:</span>
+          <input type="number" id="inputGoToCheckpoint" min="1" placeholder="#" style="width:58px; height:26px; padding:2px 4px; font-size:12px; font-weight:700; text-align:center;" title="Jump directly to checkpoint index (1-based)">
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Unified Generate & Auto-Detect Checkpoints Modal -->
+  <div class="modal-backdrop" id="modalGenerateCheckpoints">
+    <div class="modal-box" style="width: 540px;">
+      <div class="modal-header">
+        <span style="display:flex; align-items:center; gap:8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>
+          Auto-Detect &amp; Seed Horizon Checkpoints
+        </span>
+        <button id="btnCloseGenerateModal" class="table-btn">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:12px;">
+        <!-- Strategy Switcher Tabs -->
+        <div style="display:flex; background:rgba(0,0,0,0.35); border-radius:6px; padding:3px; gap:4px;">
+          <button type="button" id="btnTabCadencePitch" class="btn" style="flex:1; font-size:11px; padding:6px 4px; background:var(--accent); color:#fff; font-weight:600; text-align:center;">
+            ⛰️ Smart Gait &amp; Stride AI
+          </button>
+          <button type="button" id="btnTabCadenceTime" class="btn" style="flex:1; font-size:11px; padding:6px 4px; background:transparent; color:var(--text-muted); font-weight:600; text-align:center;">
+            ⏱️ Time Cadence
+          </button>
+          <button type="button" id="btnTabCadenceSensor" class="btn" style="flex:1; font-size:11px; padding:6px 4px; background:transparent; color:var(--text-muted); font-weight:600; text-align:center;">
+            👁️ Visual Horizon AI
+          </button>
+        </div>
+
+        <!-- Strategy 1: Smart Gait & Stride AI (Pitch Extrema) -->
+        <div id="panelCadencePitch" style="display:flex; flex-direction:column; gap:10px;">
+          <div style="font-size:11px; color:#38bdf8; background:rgba(56,189,248,0.1); border:1px solid rgba(56,189,248,0.25); padding:6px 8px; border-radius:4px; line-height:1.4;">
+            🎯 <b>Smart Gait &amp; Stride AI:</b> Automatically detects physical walking/running nodal points (crest/trough step turning points) to counteract human vertical nodding. Flat sections produce 0 keyframes.
+          </div>
+
+          <div>
+            <div style="margin-bottom:3px;">
+              <label style="font-size:11px; font-weight:600; color:var(--text-main);">Min Pitch Swing (Prominence)</label>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="range" id="rngPitchProminence" min="0.2" max="4.0" step="0.1" value="0.8" style="flex:1;">
+              <input type="number" id="numPitchProminence" min="0.2" max="10.0" step="0.1" value="0.8" style="width:60px; padding:3px 6px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:11px;">
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:2px;">
+              <span>0.4° (Subtle / Running)</span>
+              <span>0.8° (Standard Gait - Test 3255)</span>
+              <span>2.0° (Rough / Tilts Only)</span>
+            </div>
+          </div>
+
+          <div>
+            <div style="margin-bottom:3px;">
+              <label style="font-size:11px; font-weight:600; color:var(--text-main);">Roll Sway Damping (Hip Motion Filter)</label>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="range" id="rngRollDamping" min="0.0" max="1.0" step="0.05" value="0.70" style="flex:1;">
+              <input type="number" id="numRollDamping" min="0.0" max="1.0" step="0.05" value="0.70" style="width:60px; padding:3px 6px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:11px;">
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:2px;">
+              <span>0.00× (Pitch Only)</span>
+              <span>0.70× (Balanced Walking / Stride)</span>
+              <span>1.00× (Full Raw Roll)</span>
+            </div>
+          </div>
+
+          <div>
+            <label style="display:block; font-size:11px; font-weight:600; color:var(--text-main); margin-bottom:4px;">Motion Data Source</label>
+            <select id="selPitchMotionSource" class="input-select" style="width:100%; padding:6px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:12px;">
+              <option value="auto" selected>Auto (Motion Tracker / Camera Telemetry)</option>
+              <option value="existing">Analyze Current Checkpoints Trajectory</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Strategy 2: Time Interval Cadence Presets -->
+        <div id="panelCadenceTime" style="display:none; flex-direction:column; gap:12px;">
+          <div style="font-size:12px; color:var(--text-muted); line-height:1.4;">
+            Places keyframes at fixed intervals along the timeline matching physical movement rhythm (walking, cycling, or pan drift).
+          </div>
+
+          <div>
+            <label style="display:block; font-size:11px; font-weight:600; color:var(--text-main); margin-bottom:6px;">Cadence Presets</label>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;">
+              <button type="button" class="btn cadence-preset-btn" data-sec="0.5" style="font-size:11px; padding:6px; text-align:left;">
+                <b>🚶 Gait / Walking (0.5s)</b><br><span style="color:var(--text-muted); font-size:10px;">Best for clips &lt; 15s (15 frames)</span>
+              </button>
+              <button type="button" class="btn cadence-preset-btn" data-sec="1.0" style="font-size:11px; padding:6px; text-align:left;">
+                <b>🏃 Brisk / Running (1.0s)</b><br><span style="color:var(--text-muted); font-size:10px;">Best for clips &lt; 60s (30 frames)</span>
+              </button>
+              <button type="button" class="btn cadence-preset-btn" data-sec="5.0" style="font-size:11px; padding:6px; text-align:left;">
+                <b>🚗 Smooth Pan / Vehicle (5.0s)</b><br><span style="color:var(--text-muted); font-size:10px;">Medium videos (1–5 mins)</span>
+              </button>
+              <button type="button" class="btn cadence-preset-btn" data-sec="15.0" style="font-size:11px; padding:6px; text-align:left;">
+                <b>🔭 Macro Horizon Drift (15.0s)</b><br><span style="color:var(--text-muted); font-size:10px;">Long videos (5–15+ mins)</span>
+              </button>
+            </div>
+          </div>
+
+          <div style="flex:1;">
+            <div style="display:flex; gap:10px; align-items:flex-end;">
+              <div style="flex:1;">
+                <label style="display:block; font-size:11px; font-weight:600; color:var(--text-main); margin-bottom:4px;">Interval (Seconds)</label>
+                <input type="number" id="numCadenceIntervalSec" step="0.1" min="0.1" max="120.0" value="0.5" style="width:100%; padding:6px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:12px;">
+              </div>
+              <div style="flex:1;">
+                <label style="display:block; font-size:11px; font-weight:600; color:var(--text-main); margin-bottom:4px;">Interval (Frames)</label>
+                <input type="number" id="numCadenceIntervalFrames" step="1" min="1" max="3600" value="15" style="width:100%; padding:6px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:12px;">
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label style="display:block; font-size:11px; font-weight:600; color:var(--text-main); margin-bottom:4px;">Initial Keyframe Values</label>
+            <select id="selCadenceInitialValues" class="input-select" style="width:100%; padding:6px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:12px;">
+              <option value="zero" selected>Neutral 0.0° Level (Ready for visual adjustment)</option>
+              <option value="auto">Sample Motion / Telemetry Data (if available)</option>
+              <option value="current">Hold Current Angles</option>
+              <option value="interpolate">Interpolate Between Existing Keyframes</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Strategy 3: Visual Horizon AI -->
+        <div id="panelCadenceSensor" style="display:none; flex-direction:column; gap:10px;">
+          <div id="autoDetectContextBadge" style="font-size:11px; padding:6px 10px; border-radius:6px; background:rgba(56, 189, 248, 0.12); border:1px solid rgba(56, 189, 248, 0.3); color:#38bdf8; display:none; line-height:1.4;"></div>
+
+          <div style="font-size:12px; color:var(--text-muted); line-height:1.4;">
+            Extracts physical tilt corrections directly from video frame optical analysis (edge detection &amp; sky-ground segmentation).
+          </div>
+
+          <input type="hidden" id="selAutoDetectSource" value="vision">
+
+          <div id="rowAutoDetectDensity">
+            <div style="margin-bottom:3px;">
+              <label style="font-size:11px; font-weight:600; color:var(--text-main);">Curve Simplification Tolerance (ε)</label>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input type="range" id="rngAutoDetectEpsilon" min="0.2" max="4.0" step="0.05" value="1.50" style="flex:1;">
+              <input type="number" id="numAutoDetectEpsilon" min="0.1" max="10.0" step="0.05" value="1.50" style="width:60px; padding:3px 6px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:11px;">
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:2px;">
+              <span>0.50° (Ultra-Dense)</span>
+              <span>1.50° (Fine / Detailed)</span>
+              <span>2.50° (Balanced)</span>
+              <span>3.50° (Smooth)</span>
+            </div>
+          </div>
+
+          <div id="rowAutoDetectTarget">
+            <label style="display:block; font-size:11px; font-weight:600; color:var(--text-main); margin-bottom:4px;">Optical Reference Target</label>
+            <select id="selAutoDetectTarget" class="input-select" style="width:100%; padding:6px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:12px;">
+              <option value="ground" selected>Ground / Road Contact Line (Streets, Parks, Trails)</option>
+              <option value="skyline">Skyline / Canopy Boundary (Open Fields, Marine)</option>
+            </select>
+          </div>
+
+          <div id="rowAutoDetectLockRoll" style="margin-top:2px;">
+            <label style="font-size:11px; color:var(--text-main); display:flex; align-items:center; gap:6px; cursor:pointer;">
+              <input type="checkbox" id="chkAutoDetectLockRoll" checked> Lock Roll to 0.0° (Pitch-Only; prevents false roll on hills)
+            </label>
+          </div>
+
+          <div id="rowBaselineOffsets" style="display:flex; gap:10px;">
+            <div style="flex:1;">
+              <label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px;">Baseline Stitch Pitch</label>
+              <input type="number" id="numAutoDetectBaselinePitch" step="0.1" value="0.0" style="width:100%; padding:5px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:12px;">
+            </div>
+            <div style="flex:1;">
+              <label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px;">Baseline Stitch Roll</label>
+              <input type="number" id="numAutoDetectBaselineRoll" step="0.1" value="0.0" style="width:100%; padding:5px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:12px;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Scope Controls (Shared for Cadence & Pitch tabs) -->
+        <div id="rowCadenceScopeControls">
+          <label style="display:block; font-size:11px; font-weight:600; color:var(--text-main); margin-bottom:4px;">Timeline Scope</label>
+          <select id="selCadenceScope" class="input-select" style="width:100%; padding:6px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:12px;">
+            <option value="all" selected>Entire Video (0.0s to End)</option>
+            <option value="playhead_10">Playhead Window (Current ± 5 sec)</option>
+            <option value="playhead_30">Playhead Window (Current ± 15 sec)</option>
+            <option value="custom">Custom Frame Range</option>
+          </select>
+        </div>
+
+        <div id="rowCadenceCustomRange" style="display:none; gap:10px;">
+          <div style="flex:1;">
+            <label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px;">Start Frame</label>
+            <input type="number" id="numCadenceStartFrame" min="0" value="0" style="width:100%; padding:5px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:12px;">
+          </div>
+          <div style="flex:1;">
+            <label style="display:block; font-size:11px; color:var(--text-muted); margin-bottom:2px;">End Frame</label>
+            <input type="number" id="numCadenceEndFrame" min="1" value="90" style="width:100%; padding:5px 8px; background:var(--bg-card); border:1px solid var(--border-color); border-radius:4px; color:#fff; font-size:12px;">
+          </div>
+        </div>
+
+        <!-- Live Summary / Calculation Box -->
+        <div id="cadenceSummaryBox" style="font-size:12px; padding:8px 12px; border-radius:6px; background:rgba(30,41,59,0.7); border:1px solid rgba(255,255,255,0.1); line-height:1.4;">
+          <div id="cadenceCalcText">Calculated: <b>7 keyframes</b> across 3.0s (90 frames).</div>
+          <div id="cadenceWarningBadge" style="display:none; margin-top:6px; padding:6px 8px; border-radius:4px; background:rgba(245,158,11,0.15); border:1px solid #f59e0b; color:#fbbf24; font-size:11px;">
+            ⚠️ <b>Long Video Guard:</b> <span id="cadenceWarningText">High count.</span>
+            <button type="button" id="btnApplyAdaptiveCadence" class="table-btn" style="margin-left:6px; color:#fff; background:#d97706; padding:2px 6px;">Use Adaptive (~50 CPs)</button>
+          </div>
+        </div>
+
+        <div id="autoDetectStatusMsg" style="font-size:11px; color:#38bdf8; display:none; padding:6px 8px; background:rgba(56, 189, 248, 0.1); border-radius:4px;"></div>
+      </div>
+
+      <div class="modal-footer" style="display:flex; justify-content:space-between; align-items:center;">
+        <label style="font-size:11px; color:var(--text-muted); display:flex; align-items:center; gap:6px; cursor:pointer;">
+          <input type="checkbox" id="chkCadenceReplaceExisting" checked> Replace existing checkpoints
+        </label>
+        <div style="display:flex; gap:8px;">
+          <button type="button" id="btnCancelCadence" class="btn">Cancel</button>
+          <button type="button" id="btnExecuteCadence" class="btn btn-primary" style="background:#0284c7; border-color:#0284c7; color:#fff; font-weight:600;">
+            ⚡ Generate Keyframes
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Non-VR Warning Modal -->
+  <div class="modal-backdrop" id="modalNonVrWarning">
+    <div class="modal-box" style="width: 500px;">
+      <div class="modal-header" style="color: var(--danger); display:flex; align-items:center; justify-content:space-between;">
+        <span id="nonVrTitle" style="display:flex; align-items:center; gap:8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          Non-360° (Flat) Video Detected
+        </span>
+        <button id="btnCloseNonVrWarning" class="table-btn">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:12px; font-size:12px; color:var(--text-main); line-height:1.5;">
+        <div>
+          The loaded video resolution is <strong id="nonVrRes" style="color:var(--accent);">1920×1080</strong> (Aspect Ratio: <span id="nonVrRatio" style="color:var(--accent);">16:9</span>).
+        </div>
+        <div id="nonVrText" style="background:rgba(239, 68, 68, 0.12); border:1px solid var(--danger); border-radius:6px; padding:10px 12px; color:#fca5a5; font-size:11px;">
+          <strong>Warning:</strong> This editor is designed specifically for <strong>360° Equirectangular (VR) footage (2:1 aspect ratio)</strong>. Flat rectilinear videos will be distorted and stretched across the 3D sphere.
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:8px;">
+        <button id="btnOpenDifferentVideo" class="btn">Choose 360 Video</button>
+        <button id="btnDismissNonVrWarning" class="btn btn-primary">Continue Anyway</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save Checkpoints Success Modal -->
+  <div class="modal-backdrop" id="modalSaveSuccess">
+    <div class="modal-box" style="width: 520px;">
+      <div class="modal-header" style="color: var(--success); display:flex; align-items:center; justify-content:space-between;">
+        <span style="display:flex; align-items:center; gap:8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          Horizon Checkpoints Saved
+        </span>
+        <button id="btnCloseSaveSuccessModal" class="table-btn">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:14px; font-size:12px; color:var(--text-main); line-height:1.5;">
+        <div>
+          Successfully saved <strong id="saveModalCount" style="color:var(--success); font-size:13px;">0</strong> checkpoints to:
+        </div>
+        <div style="background:var(--bg-dark); border:1px solid var(--border-color); border-radius:6px; padding:10px 12px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
+          <code id="saveModalPath" style="font-family:monospace; color:var(--accent); font-size:11px; word-break:break-all; user-select:all;">data/runtime/work/horizon_checkpoints.json</code>
+          <button id="btnCopySavePath" class="btn" style="padding:3px 8px; font-size:11px; flex-shrink:0;" title="Copy file path">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+            Copy
+          </button>
+        </div>
+        <div id="saveSuccessNoticeBox" style="background:rgba(16, 185, 129, 0.1); border:1px solid rgba(16, 185, 129, 0.25); border-radius:6px; padding:10px 12px; color:var(--text-main); display:flex; align-items:flex-start; gap:10px;">
+          <div id="saveSuccessNoticeIcon" style="flex-shrink:0; margin-top:2px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+          </div>
+          <div id="saveSuccessNoticeText" style="font-size:12px; line-height:1.4;">
+            Checkpoints saved! The pipeline is automatically resuming in the background. Return to the <strong>Dashboard</strong> to monitor progress.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:8px;">
+        <button id="btnDismissSaveSuccess" class="btn">Continue Editing</button>
+        <button id="btnReturnDashboard" class="btn btn-primary" style="background:var(--success); border-color:var(--success); color:#fff;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 10 4 15 9 20"></polyline><path d="M20 4v7a4 4 0 0 1-4 4H4"></path></svg>
+          Return to Dashboard
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Horizon Parameters Log Viewer Modal -->
+  <div class="modal-backdrop" id="modalHorizonParamsLog" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); align-items:center; justify-content:center;">
+    <div class="modal-box" style="width:680px; max-width:92vw; max-height:85vh; background:#0f172a; border:1px solid var(--border-color); border-radius:8px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.8);">
+      <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border-color); background:#1e293b;">
+        <span style="font-weight:700; color:#38bdf8; display:flex; align-items:center; gap:8px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+          Horizon Parameters Audit Log
+        </span>
+        <button id="btnCloseParamLog" class="table-btn" style="padding:4px 8px; cursor:pointer;">✕</button>
+      </div>
+      <div class="modal-body" style="padding:14px; flex:1; overflow-y:auto; background:#0b1120;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span id="paramLogFilePath" style="font-family:monospace; font-size:11px; color:var(--text-muted);">data/runtime/work/{out_base}_horizon_params.log</span>
+          <button id="btnCopyParamLog" class="btn" style="padding:3px 8px; font-size:11px; background:#0284c7; border:none; color:#fff; font-weight:600; cursor:pointer;">📋 Copy Log</button>
+        </div>
+        <pre id="paramLogContent" style="font-family:'Courier New', monospace; font-size:11px; line-height:1.4; color:#94a3b8; background:#020617; padding:12px; border-radius:4px; border:1px solid rgba(255,255,255,0.08); overflow-x:auto; white-space:pre-wrap; margin:0; max-height:55vh;"></pre>
+      </div>
+      <div class="modal-footer" style="padding:10px 16px; border-top:1px solid var(--border-color); display:flex; justify-content:flex-end; gap:8px; background:#1e293b;">
+        <button id="btnCloseParamLogFooter" class="btn" style="padding:6px 16px; cursor:pointer;">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic -->
+  <script type="module">
+    import * as THREE from 'three';
+    window.THREE = THREE;
+
+    const state = {
+      video: null,
+      videoName: '',
+      outBase: '',
+      fps: 29.97,
+      totalFrames: 0,
+      currentFrame: 0,
+      isPlaying: false,
+      viewYaw: 0.0,   // Operator camera pan (looking around)
+      levelYaw: 0.0,  // Video stabilization Yaw correction
+      pitch: 0.0,     // Horizon Pitch correction
+      roll: 0.0,      // Horizon Roll correction
+      fov: 75.0,
+      ignoreYaw: true,
+      checkpoints: [],
+      isDrawing: false,
+      drawPoints: [],
+      liveTrajectory: true,
+      playbackRate: 1.0,
+      activeParams: null
+    };
+
+    const video = document.getElementById('videoElement');
+    const viewportContainer = document.getElementById('viewportContainer');
+    const webglCanvas = document.getElementById('webglCanvas');
+    const drawCanvas = document.getElementById('drawCanvas');
+    const drawCtx = drawCanvas.getContext('2d');
+    const horizonLine = document.getElementById('horizonLine');
+    const verticalCenterLine = document.getElementById('verticalCenterLine');
+    const centerCrosshair = document.getElementById('centerCrosshair');
+    const checkpointNavigatorStatus = document.getElementById('checkpointNavigatorStatus');
+    const inputGoToCheckpoint = document.getElementById('inputGoToCheckpoint');
+
+    const hudFrame = document.getElementById('hudFrame');
+    const hudTime = document.getElementById('hudTime');
+    const hudAngles = document.getElementById('hudAngles');
+    const hudViewYaw = document.getElementById('hudViewYaw');
+    const hudStatus = document.getElementById('hudStatus');
+
+    const sliderYaw = document.getElementById('sliderYaw');
+    const numYaw = document.getElementById('numYaw');
+    const valYaw = document.getElementById('valYaw');
+    const lblYawHeading = document.getElementById('lblYawHeading');
+    const yawControlGroup = document.getElementById('yawControlGroup');
+    const rowIgnoreYaw = document.getElementById('rowIgnoreYaw');
+    const lblIgnoreYaw = document.getElementById('lblIgnoreYaw');
+    const sliderPitch = document.getElementById('sliderPitch');
+    const numPitch = document.getElementById('numPitch');
+    const valPitch = document.getElementById('valPitch');
+    const sliderRoll = document.getElementById('sliderRoll');
+    const numRoll = document.getElementById('numRoll');
+    const valRoll = document.getElementById('valRoll');
+    const sliderFov = document.getElementById('sliderFov');
+    const numFov = document.getElementById('numFov');
+    const valFov = document.getElementById('valFov');
+
+    const chkIgnoreYaw = document.getElementById('chkIgnoreYaw');
+    const chkHorizonGuide = document.getElementById('chkHorizonGuide');
+    const chkSphereGrid = document.getElementById('chkSphereGrid');
+    const chkCenterCrosshair = document.getElementById('chkCenterCrosshair');
+    const chkLiveTrajectory = document.getElementById('chkLiveTrajectory');
+
+    const timelineContainer = document.getElementById('timelineContainer');
+    const timelineProgress = document.getElementById('timelineProgress');
+    const timelinePlayhead = document.getElementById('timelinePlayhead');
+    const timelineKeyframes = document.getElementById('timelineKeyframes');
+    const timecodeDisplay = document.getElementById('timecodeDisplay');
+    const inputFrame = document.getElementById('inputFrame');
+    const inputFps = document.getElementById('inputFps');
+    const btnPlayPause = document.getElementById('btnPlayPause');
+    const selPlaybackRate = document.getElementById('selPlaybackRate');
+
+    const checkpointTableBody = document.getElementById('checkpointTableBody');
+    const checkpointCount = document.getElementById('checkpointCount');
+
+    const lblParamStrategy = document.getElementById('lblParamStrategy');
+    const lblParamDensity = document.getElementById('lblParamDensity');
+    const lblParamProminence = document.getElementById('lblParamProminence');
+    const lblParamRollDamp = document.getElementById('lblParamRollDamp');
+    const lblParamBaselinePitch = document.getElementById('lblParamBaselinePitch');
+    const lblParamBaselineRoll = document.getElementById('lblParamBaselineRoll');
+    const lblParamRange = document.getElementById('lblParamRange');
+    const lblParamCount = document.getElementById('lblParamCount');
+    const lblParamLogFile = document.getElementById('lblParamLogFile');
+    const rowParamDensity = document.getElementById('rowParamDensity');
+    const rowParamOpticalTarget = document.getElementById('rowParamOpticalTarget');
+    const lblParamOpticalTarget = document.getElementById('lblParamOpticalTarget');
+    const rowParamProminenceDamp = document.getElementById('rowParamProminenceDamp');
+    const rowParamBaseline = document.getElementById('rowParamBaseline');
+    const paramBadgeSource = document.getElementById('paramBadgeSource');
+    const btnViewParamLog = document.getElementById('btnViewParamLog');
+
+    const modalHorizonParamsLog = document.getElementById('modalHorizonParamsLog');
+    const btnCloseParamLog = document.getElementById('btnCloseParamLog');
+    const btnCloseParamLogFooter = document.getElementById('btnCloseParamLogFooter');
+    const btnCopyParamLog = document.getElementById('btnCopyParamLog');
+    const paramLogFilePath = document.getElementById('paramLogFilePath');
+    const paramLogContent = document.getElementById('paramLogContent');
+
+    let scene, camera, renderer, sphereMesh, gridHelperSphere, videoTexture;
+
+    function initThree() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(state.fov, viewportContainer.clientWidth / viewportContainer.clientHeight, 0.1, 1000);
+      camera.position.set(0, 0, 0);
+
+      renderer = new THREE.WebGLRenderer({ canvas: webglCanvas, antialias: true, alpha: false });
+      renderer.setSize(viewportContainer.clientWidth, viewportContainer.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+
+      const sphereGeometry = new THREE.SphereGeometry(500, 64, 32);
+      sphereGeometry.scale(-1, 1, 1);
+
+      const placeholderCanvas = document.createElement('canvas');
+      placeholderCanvas.width = 2048;
+      placeholderCanvas.height = 1024;
+      const ctx = placeholderCanvas.getContext('2d');
+      ctx.fillStyle = '#1e293b';
+      ctx.fillRect(0, 0, 2048, 1024);
+      ctx.strokeStyle = '#334155';
+      ctx.lineWidth = 4;
+      for (let y = 0; y <= 1024; y += 128) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(2048, y); ctx.stroke();
+      }
+      for (let x = 0; x <= 2048; x += 128) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 1024); ctx.stroke();
+      }
+      ctx.fillStyle = '#00d2ff';
+      ctx.font = 'bold 48px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('360° EQUIRECTANGULAR VIDEO PREVIEW', 1024, 480);
+      ctx.font = '28px sans-serif';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText('Click "Open 360 Video" to load your video clip', 1024, 540);
+
+      videoTexture = new THREE.CanvasTexture(placeholderCanvas);
+      videoTexture.minFilter = THREE.LinearFilter;
+      videoTexture.magFilter = THREE.LinearFilter;
+
+      const sphereMaterial = new THREE.MeshBasicMaterial({ map: videoTexture });
+      sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial);
+      sphereMesh.rotation.y = -Math.PI / 2;
+      scene.add(sphereMesh);
+
+      createSphericalGrid();
+
+      window.addEventListener('resize', onWindowResize);
+      setupMouseInteractions();
+      animate();
+    }
+
+    function createSphericalGrid() {
+      gridHelperSphere = new THREE.Group();
+      const radius = 490;
+
+      for (let lat = -80; lat <= 80; lat += 20) {
+        const rad = THREE.MathUtils.degToRad(lat);
+        const r = radius * Math.cos(rad);
+        const y = radius * Math.sin(rad);
+
+        const circlePoints = [];
+        for (let i = 0; i <= 64; i++) {
+          const theta = (i / 64) * Math.PI * 2;
+          circlePoints.push(new THREE.Vector3(r * Math.sin(theta), y, r * Math.cos(theta)));
+        }
+        const geom = new THREE.BufferGeometry().setFromPoints(circlePoints);
+        const mat = new THREE.LineBasicMaterial({
+          color: lat === 0 ? 0xff0055 : 0x00d2ff,
+          transparent: true,
+          opacity: lat === 0 ? 0.85 : 0.25
+        });
+        gridHelperSphere.add(new THREE.Line(geom, mat));
+      }
+
+      for (let lon = 0; lon < 360; lon += 30) {
+        const rad = THREE.MathUtils.degToRad(lon);
+        const meridianPoints = [];
+        for (let i = -32; i <= 32; i++) {
+          const latRad = (i / 32) * (Math.PI / 2);
+          const r = radius * Math.cos(latRad);
+          const y = radius * Math.sin(latRad);
+          meridianPoints.push(new THREE.Vector3(r * Math.sin(rad), y, r * Math.cos(rad)));
+        }
+        const geom = new THREE.BufferGeometry().setFromPoints(meridianPoints);
+        const mat = new THREE.LineBasicMaterial({ color: 0x00d2ff, transparent: true, opacity: 0.2 });
+        gridHelperSphere.add(new THREE.Line(geom, mat));
+      }
+
+      scene.add(gridHelperSphere);
+    }
+
+    function onWindowResize() {
+      const w = viewportContainer.clientWidth;
+      const h = viewportContainer.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      drawCanvas.width = w;
+      drawCanvas.height = h;
+    }
+
+    function updateCameraRotation(skipSliderSync = false) {
+      const effectiveYaw = state.ignoreYaw ? state.viewYaw : (state.viewYaw + state.levelYaw);
+      const yawRad = THREE.MathUtils.degToRad(-effectiveYaw);
+      const pitchRad = THREE.MathUtils.degToRad(state.pitch);
+      const rollRad = THREE.MathUtils.degToRad(-state.roll);
+
+      camera.rotation.order = 'YXZ';
+      camera.rotation.set(pitchRad, yawRad, rollRad);
+
+      camera.fov = state.fov;
+      camera.updateProjectionMatrix();
+
+      hudAngles.textContent = `${state.pitch.toFixed(1)}°, ${state.roll.toFixed(1)}°`;
+      hudViewYaw.textContent = `${state.viewYaw.toFixed(1)}°`;
+      const btnRecenterView = document.getElementById('btnRecenterView');
+      if (btnRecenterView) {
+        btnRecenterView.style.display = Math.abs(state.viewYaw) > 0.2 ? 'inline-block' : 'none';
+      }
+      if (valPitch) valPitch.textContent = `${state.pitch.toFixed(1)}°`;
+      if (valRoll) valRoll.textContent = `${state.roll.toFixed(1)}°`;
+      if (valYaw) valYaw.textContent = `${state.levelYaw.toFixed(1)}°`;
+      if (valFov) valFov.textContent = `${state.fov.toFixed(0)}°`;
+
+      if (!skipSliderSync) {
+        sliderPitch.value = state.pitch;
+        numPitch.value = state.pitch.toFixed(1);
+        sliderRoll.value = state.roll;
+        numRoll.value = state.roll.toFixed(1);
+        sliderYaw.value = state.levelYaw;
+        numYaw.value = state.levelYaw.toFixed(1);
+        sliderFov.value = state.fov;
+        numFov.value = state.fov;
+      }
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (state.isPlaying && !video.paused && !video.ended && video.readyState >= video.HAVE_CURRENT_DATA) {
+        state.currentFrame = Math.round(video.currentTime * state.fps);
+        updateTimelineUI();
+
+        if (state.liveTrajectory && state.checkpoints.length > 0) {
+          const interpolated = getInterpolatedAngles(state.currentFrame);
+          state.pitch = interpolated.pitch;
+          state.roll = interpolated.roll;
+          if (!state.ignoreYaw) {
+            state.levelYaw = interpolated.yaw;
+          }
+          updateCameraRotation();
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    document.getElementById('btnOpenVideo').addEventListener('click', () => {
+      document.getElementById('videoFileInput').click();
+    });
+
+    document.getElementById('videoFileInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      state.videoName = file.name;
+      state.outBase = file.name.replace(/\.[^/.]+$/, '');
+      document.title = `Horizon Tool - ${state.outBase}`;
+
+      const url = URL.createObjectURL(file);
+      loadVideo(url, file);
+    });
+
+    async function detectSpatialMetadata(fileOrSrc) {
+      try {
+        let buffers = [];
+        if (fileOrSrc instanceof Blob) {
+          const size = fileOrSrc.size;
+          const headChunk = fileOrSrc.slice(0, Math.min(524288, size));
+          buffers.push(await headChunk.arrayBuffer());
+          if (size > 1048576) {
+            const tailChunk = fileOrSrc.slice(size - 524288, size);
+            buffers.push(await tailChunk.arrayBuffer());
+          }
+        } else if (typeof fileOrSrc === 'string' && !fileOrSrc.startsWith('blob:')) {
+          try {
+            const res = await fetch(fileOrSrc, { headers: { 'Range': 'bytes=0-262144' } });
+            if (res.ok || res.status === 206) {
+              buffers.push(await res.arrayBuffer());
+            }
+          } catch (_) {}
+        }
+
+        const decoder = new TextDecoder('latin1');
+        for (const buf of buffers) {
+          const str = decoder.decode(buf);
+          if (str.includes('sv3d') || str.includes('GSpherical') || str.includes('equirectangular') || str.includes('st3d') || str.includes('v360')) {
+            return true;
+          }
+        }
+      } catch (err) {
+        console.warn('Spatial metadata scan error:', err);
+      }
+      return false;
+    }
+
+    function checkDualFisheyeFrame(videoEl) {
+      return new Promise((resolve) => {
+        const attempt = (retries) => {
+          try {
+            if (!videoEl || videoEl.videoWidth === 0 || videoEl.videoHeight === 0) {
+              if (retries > 0) return setTimeout(() => attempt(retries - 1), 60);
+              return resolve(false);
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 32;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(videoEl, 0, 0, 64, 32);
+
+            // Sample 6 key mask coordinates:
+            // Top-left (2,2), Top-mid (32,2), Top-right (61,2)
+            // Bottom-left (2,29), Bottom-mid (32,29), Bottom-right (61,29)
+            const coords = [
+              [2, 2], [32, 2], [61, 2],
+              [2, 29], [32, 29], [61, 29]
+            ];
+
+            let blackCount = 0;
+            for (const [x, y] of coords) {
+              const pixel = ctx.getImageData(x, y, 1, 1).data;
+              if (pixel[0] < 18 && pixel[1] < 18 && pixel[2] < 18) {
+                blackCount++;
+              }
+            }
+
+            // Check center of left & right lenses for scene illumination
+            const leftLensCenter = ctx.getImageData(16, 16, 1, 1).data;
+            const rightLensCenter = ctx.getImageData(48, 16, 1, 1).data;
+            const hasCenterContent = (leftLensCenter[0] + leftLensCenter[1] + leftLensCenter[2] > 20) ||
+                                     (rightLensCenter[0] + rightLensCenter[1] + rightLensCenter[2] > 20);
+
+            if (blackCount >= 5 && hasCenterContent) {
+              return resolve(true);
+            }
+
+            // If whole frame is still black during video init, retry
+            if (blackCount === 6 && !hasCenterContent && retries > 0) {
+              return setTimeout(() => attempt(retries - 1), 80);
+            }
+
+            resolve(blackCount >= 5);
+          } catch (e) {
+            console.warn("Dual fisheye check error:", e);
+            resolve(false);
+          }
+        };
+
+        attempt(6);
+      });
+    }
+
+    async function checkVrVideoFormat(width, height, fileOrSrc) {
+      if (!width || !height) return;
+      const ratio = width / height;
+
+      const modalNonVr = document.getElementById('modalNonVrWarning');
+      const nonVrTitle = document.getElementById('nonVrTitle');
+      const nonVrText = document.getElementById('nonVrText');
+      const nonVrRes = document.getElementById('nonVrRes');
+      const nonVrRatio = document.getElementById('nonVrRatio');
+
+      // 1. Check for spatial metadata
+      const hasSpatialMeta = await detectSpatialMetadata(fileOrSrc);
+
+      // 2. Optical check for Raw Dual-Fisheye unstitched recording
+      const isDualFisheye = await checkDualFisheyeFrame(video);
+
+      if (isDualFisheye) {
+        if (modalNonVr && nonVrTitle && nonVrText && nonVrRes && nonVrRatio) {
+          nonVrTitle.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            Raw Dual-Fisheye Video Detected
+          `;
+          nonVrRes.textContent = `${width} × ${height}`;
+          nonVrRatio.textContent = '2:1 (Dual-Lens Circular)';
+          nonVrText.innerHTML = `
+            <strong>Warning:</strong> This file is an <strong>unstitched dual-lens recording</strong> (two circular fisheye images).
+            <br><br>
+            Please stitch this video first in the <strong>Dashboard pipeline</strong> into equirectangular format before adjusting horizon checkpoints.
+          `;
+          modalNonVr.style.display = 'flex';
+          return;
+        }
+      }
+
+      if (hasSpatialMeta) {
+        return;
+      }
+
+      // 3. Geometric Aspect Ratio Check for Flat Video
+      const is2to1 = Math.abs(ratio - 2.0) <= 0.15;
+      const is1to1 = Math.abs(ratio - 1.0) <= 0.05;
+      const is4to1 = Math.abs(ratio - 4.0) <= 0.15;
+
+      if (!is2to1 && !is1to1 && !is4to1) {
+        if (modalNonVr && nonVrTitle && nonVrText && nonVrRes && nonVrRatio) {
+          nonVrTitle.innerHTML = `
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            Non-360° (Flat) Video Detected
+          `;
+          nonVrRes.textContent = `${width} × ${height}`;
+          let ratioLabel = `${ratio.toFixed(2)}:1`;
+          if (Math.abs(ratio - (16 / 9)) < 0.05) ratioLabel = '16:9 (~1.78:1)';
+          else if (Math.abs(ratio - (4 / 3)) < 0.05) ratioLabel = '4:3 (~1.33:1)';
+          else if (Math.abs(ratio - (9 / 16)) < 0.05) ratioLabel = '9:16 (~0.56:1)';
+          else if (Math.abs(ratio - (21 / 9)) < 0.05) ratioLabel = '21:9 (~2.33:1)';
+          nonVrRatio.textContent = ratioLabel;
+          nonVrText.innerHTML = `
+            <strong>Warning:</strong> This editor is designed specifically for <strong>360° Equirectangular (VR) footage (2:1 aspect ratio)</strong>. Flat rectilinear videos will be distorted and stretched across the 3D sphere.
+          `;
+          modalNonVr.style.display = 'flex';
+        }
+      }
+    }
+
+    function loadVideo(src, fileObj = null) {
+      hudStatus.textContent = 'Loading video...';
+
+      if (fileObj && fileObj.name) {
+        state.videoName = fileObj.name;
+        if (!state.outBase) {
+          state.outBase = fileObj.name.replace(/\.[^/.]+$/, '');
+        }
+      } else if (typeof src === 'string' && !src.startsWith('blob:')) {
+        state.videoName = src;
+        if (!state.outBase) {
+          const parts = src.split(/[\\/]/);
+          const fname = parts[parts.length - 1];
+          state.outBase = fname.replace(/\.[^/.]+$/, '');
+        }
+      }
+      if (state.outBase && !document.title.includes(state.outBase)) {
+        document.title = `Horizon Tool - ${state.outBase}`;
+      }
+
+      let initialized = false;
+      function handleMetadataLoaded() {
+        if (initialized) return;
+        initialized = true;
+
+        state.fps = parseFloat(inputFps.value) || 29.97;
+        state.totalFrames = Math.max(1, Math.round(video.duration * state.fps));
+        state.currentFrame = 0;
+        inputFrame.max = state.totalFrames - 1;
+
+        checkVrVideoFormat(video.videoWidth, video.videoHeight, fileObj || src);
+
+        videoTexture = new THREE.VideoTexture(video);
+        videoTexture.minFilter = THREE.LinearFilter;
+        videoTexture.magFilter = THREE.LinearFilter;
+        videoTexture.format = THREE.RGBAFormat;
+        sphereMesh.material.map = videoTexture;
+        sphereMesh.material.needsUpdate = true;
+
+        hudStatus.textContent = 'Ready';
+        renderCheckpoints();
+        updateTimelineUI();
+      }
+
+      video.addEventListener('loadedmetadata', handleMetadataLoaded, { once: true });
+      video.addEventListener('loadeddata', handleMetadataLoaded, { once: true });
+      video.addEventListener('error', (e) => {
+        console.error('Video loading error:', e, video.error);
+        hudStatus.textContent = 'Error loading video';
+      }, { once: true });
+
+      video.src = src;
+      video.load();
+
+      if (video.readyState >= 1 && video.videoWidth > 0) {
+        handleMetadataLoaded();
+      }
+    }
+
+    function seekToFrame(frame) {
+      state.currentFrame = Math.max(0, Math.min(frame, state.totalFrames - 1));
+      const targetTime = state.currentFrame / state.fps;
+      video.currentTime = targetTime;
+
+      const exactCp = state.checkpoints.find(c => c.frame === state.currentFrame);
+      if (exactCp) {
+        state.pitch = exactCp.pitch;
+        state.roll = exactCp.roll;
+        if (!state.ignoreYaw) {
+          state.levelYaw = exactCp.yaw || 0.0;
+        }
+        updateCameraRotation();
+      } else if (state.liveTrajectory && state.checkpoints.length > 0) {
+        const interpolated = getInterpolatedAngles(state.currentFrame);
+        state.pitch = interpolated.pitch;
+        state.roll = interpolated.roll;
+        if (!state.ignoreYaw) {
+          state.levelYaw = interpolated.yaw;
+        }
+        updateCameraRotation();
+      } else if (!state.liveTrajectory) {
+        state.pitch = 0.0;
+        state.roll = 0.0;
+        if (!state.ignoreYaw) {
+          state.levelYaw = 0.0;
+        }
+        updateCameraRotation();
+      }
+
+      updateTimelineUI();
+    }
+    window.seekToFrame = seekToFrame;
+
+    function setPlaybackSpeed(rate, showHud = true) {
+      rate = Math.max(0.1, Math.min(2.0, parseFloat(rate) || 1.0));
+      state.playbackRate = rate;
+      if (video) {
+        video.playbackRate = rate;
+        video.defaultPlaybackRate = rate;
+      }
+      if (selPlaybackRate) {
+        selPlaybackRate.value = String(rate);
+      }
+      if (showHud && hudStatus) {
+        hudStatus.innerHTML = `<span style="color:var(--accent); font-weight:bold;">⚡ Speed: ${rate.toFixed(2)}x</span>`;
+        setTimeout(() => {
+          if (hudStatus.textContent.includes('Speed:')) {
+            updateTimelineUI();
+          }
+        }, 1200);
+      }
+    }
+
+    const SPEED_STEPS = [0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+    function changePlaybackSpeedStep(direction) {
+      const cur = state.playbackRate || 1.0;
+      let idx = SPEED_STEPS.findIndex(s => Math.abs(s - cur) < 0.04);
+      if (idx === -1) {
+        idx = direction > 0 ? 0 : SPEED_STEPS.length - 1;
+      } else {
+        idx = Math.max(0, Math.min(SPEED_STEPS.length - 1, idx + direction));
+      }
+      setPlaybackSpeed(SPEED_STEPS[idx]);
+    }
+
+    if (selPlaybackRate) {
+      selPlaybackRate.addEventListener('change', (e) => {
+        setPlaybackSpeed(e.target.value);
+      });
+    }
+
+    function pauseVideo() {
+      if (video && !video.paused) {
+        video.pause();
+      }
+      state.isPlaying = false;
+      btnPlayPause.textContent = 'Play';
+    }
+
+    function togglePlay() {
+      if (video.paused) {
+        if (state.playbackRate && video) {
+          video.playbackRate = state.playbackRate;
+        }
+        video.play();
+        state.isPlaying = true;
+        btnPlayPause.textContent = 'Pause';
+      } else {
+        pauseVideo();
+      }
+    }
+
+    video.addEventListener('play', () => {
+      if (state.playbackRate && video) {
+        video.playbackRate = state.playbackRate;
+      }
+      state.isPlaying = true;
+      btnPlayPause.textContent = 'Pause';
+    });
+    video.addEventListener('pause', () => {
+      state.isPlaying = false;
+      btnPlayPause.textContent = 'Play';
+    });
+    video.addEventListener('ended', () => {
+      state.isPlaying = false;
+      btnPlayPause.textContent = 'Play';
+    });
+
+    btnPlayPause.addEventListener('click', togglePlay);
+    document.getElementById('btnStepBack1').addEventListener('click', () => seekToFrame(state.currentFrame - 1));
+    document.getElementById('btnStepFwd1').addEventListener('click', () => seekToFrame(state.currentFrame + 1));
+    const btnFirst = document.getElementById('btnFirstFrame') || document.getElementById('btnStepBack5');
+    if (btnFirst) btnFirst.addEventListener('click', () => seekToFrame(0));
+    const btnLast = document.getElementById('btnLastFrame') || document.getElementById('btnStepFwd5');
+    if (btnLast) btnLast.addEventListener('click', () => seekToFrame(state.totalFrames > 0 ? state.totalFrames - 1 : 0));
+
+    inputFrame.addEventListener('change', (e) => seekToFrame(parseInt(e.target.value) || 0));
+    inputFps.addEventListener('change', (e) => {
+      state.fps = parseFloat(e.target.value) || 29.97;
+      if (video.duration) {
+        state.totalFrames = Math.round(video.duration * state.fps);
+        inputFrame.max = state.totalFrames - 1;
+        updateTimelineUI();
+      }
+    });
+
+    timelineContainer.addEventListener('click', (e) => {
+      const rect = timelineContainer.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const pct = Math.max(0, Math.min(1, clickX / rect.width));
+      seekToFrame(Math.round(pct * (state.totalFrames - 1)));
+    });
+
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = (seconds % 60).toFixed(3);
+      return `${String(mins).padStart(2, '0')}:${String(secs).padStart(6, '0')}`;
+    }
+
+    function updateTimelineUI() {
+      const curTime = state.currentFrame / state.fps;
+      const totalTime = (state.totalFrames - 1) / state.fps;
+
+      hudFrame.textContent = `${state.currentFrame} / ${state.totalFrames > 0 ? state.totalFrames - 1 : 0}`;
+      hudTime.textContent = formatTime(curTime);
+      timecodeDisplay.textContent = `${formatTime(curTime)} / ${formatTime(totalTime || 0)}`;
+      inputFrame.value = state.currentFrame;
+
+      const pct = state.totalFrames > 1 ? (state.currentFrame / (state.totalFrames - 1)) * 100 : 0;
+      timelineProgress.style.width = `${pct}%`;
+      timelinePlayhead.style.left = `${pct}%`;
+
+      const exactCp = state.checkpoints.find(c => c.frame === state.currentFrame);
+      if (exactCp) {
+        hudStatus.innerHTML = `<span class="hud-checkpoint">● Checkpoint #${state.checkpoints.indexOf(exactCp) + 1}</span>`;
+      } else {
+        hudStatus.textContent = state.isPlaying ? 'Playing' : 'Paused';
+      }
+
+      updateCheckpointTableHighlight();
+      updateCheckpointNavigatorUI();
+    }
+
+    let isMouseDown = false;
+    let mouseButton = 0;
+    let prevMouseX = 0, prevMouseY = 0;
+
+    function setupMouseInteractions() {
+      viewportContainer.addEventListener('contextmenu', (e) => e.preventDefault());
+
+      viewportContainer.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.viewport-hud')) return;
+        pauseVideo();
+        if (state.isDrawing) return;
+        isMouseDown = true;
+        mouseButton = e.button;
+        prevMouseX = e.clientX;
+        prevMouseY = e.clientY;
+      });
+
+      window.addEventListener('mousemove', (e) => {
+        if (!isMouseDown || state.isDrawing) return;
+        const deltaX = e.clientX - prevMouseX;
+        const deltaY = e.clientY - prevMouseY;
+        prevMouseX = e.clientX;
+        prevMouseY = e.clientY;
+
+        const factor = (state.fov / 75.0) * 0.15;
+        const isInspectOrbit = (mouseButton === 2) || e.altKey || e.shiftKey;
+
+        // When Ignore Yaw is active, lock horizontal pan to 0° forward to keep Pitch & Roll orthogonal to screen.
+        // Full 360° inspection orbit remains accessible via Right-Click drag or Alt/Shift+Drag.
+        if (!state.ignoreYaw || isInspectOrbit) {
+          state.viewYaw = normalizeAngle(state.viewYaw - deltaX * factor);
+        }
+
+        if (!isInspectOrbit) {
+          state.pitch = Math.max(-90, Math.min(90, state.pitch + deltaY * factor));
+          syncActiveCheckpoint();
+        }
+
+        updateCameraRotation();
+      });
+
+      window.addEventListener('mouseup', () => { isMouseDown = false; });
+
+      viewportContainer.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        state.fov = Math.max(30, Math.min(120, state.fov + (e.deltaY > 0 ? 3 : -3)));
+        updateCameraRotation();
+      });
+    }
+
+    function normalizeAngle(ang) {
+      while (ang > 180) ang -= 360;
+      while (ang < -180) ang += 360;
+      return ang;
+    }
+
+    function syncActiveCheckpoint() {
+      const exactCp = state.checkpoints.find(c => c.frame === state.currentFrame);
+      if (exactCp) {
+        exactCp.pitch = parseFloat(state.pitch.toFixed(2));
+        exactCp.roll = parseFloat(state.roll.toFixed(2));
+        exactCp.yaw = state.ignoreYaw ? 0.0 : parseFloat(state.levelYaw.toFixed(2));
+        updateCheckpointTableRow(exactCp);
+        const exactIdx = state.checkpoints.indexOf(exactCp);
+        hudStatus.innerHTML = `<span class="hud-checkpoint">● Checkpoint #${exactIdx + 1}</span>`;
+        if (typeof markActiveParamsManual === 'function') {
+          markActiveParamsManual('Manual Snap / User Defined');
+        }
+      }
+    }
+
+    function updateCheckpointTableRow(cp) {
+      const idx = state.checkpoints.indexOf(cp);
+      if (idx >= 0 && checkpointTableBody.children[idx]) {
+        const tr = checkpointTableBody.children[idx];
+        const yawDisplay = state.ignoreYaw ? '<span style="color:var(--text-muted);">0.0° (Locked)</span>' : `${(cp.yaw || 0).toFixed(1)}°`;
+        if (tr.children && tr.children.length >= 4) {
+          tr.children[1].textContent = `${cp.pitch.toFixed(1)}°`;
+          tr.children[2].textContent = `${cp.roll.toFixed(1)}°`;
+          tr.children[3].innerHTML = yawDisplay;
+        }
+      }
+    }
+
+    function updateCheckpointTableHighlight() {
+      const rows = checkpointTableBody.querySelectorAll('tr');
+      state.checkpoints.forEach((cp, idx) => {
+        if (rows[idx]) {
+          if (cp.frame === state.currentFrame) {
+            rows[idx].classList.add('active-row');
+            rows[idx].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          } else {
+            rows[idx].classList.remove('active-row');
+          }
+        }
+      });
+    }
+
+    function updateCheckpointNavigatorUI() {
+      if (!checkpointNavigatorStatus) return;
+      const totalCps = state.checkpoints ? state.checkpoints.length : 0;
+      if (inputGoToCheckpoint) {
+        inputGoToCheckpoint.max = totalCps > 0 ? totalCps : 1;
+      }
+      if (totalCps === 0) {
+        checkpointNavigatorStatus.textContent = '- / 0';
+        checkpointNavigatorStatus.style.color = 'var(--text-muted)';
+        return;
+      }
+      const exactIdx = state.checkpoints.findIndex(c => c.frame === state.currentFrame);
+      if (exactIdx !== -1) {
+        checkpointNavigatorStatus.textContent = `${exactIdx + 1} / ${totalCps}`;
+        checkpointNavigatorStatus.style.color = 'var(--checkpoint-color)';
+      } else {
+        let prevIdx = -1;
+        for (let i = 0; i < totalCps; i++) {
+          if (state.checkpoints[i].frame <= state.currentFrame) {
+            prevIdx = i;
+          } else {
+            break;
+          }
+        }
+        if (prevIdx === -1) {
+          checkpointNavigatorStatus.textContent = `< 1 / ${totalCps}`;
+        } else {
+          checkpointNavigatorStatus.textContent = `~${prevIdx + 1} / ${totalCps}`;
+        }
+        checkpointNavigatorStatus.style.color = 'var(--text-muted)';
+      }
+    }
+
+    function bindAngleControl(slider, num, prop, min, max) {
+      slider.addEventListener('pointerdown', pauseVideo);
+      slider.addEventListener('mousedown', pauseVideo);
+      num.addEventListener('focus', pauseVideo);
+
+      const stepperWrap = num.closest('.stepper-wrap');
+      const btnUp = stepperWrap ? stepperWrap.querySelector('.stepper-up') : null;
+      const btnDown = stepperWrap ? stepperWrap.querySelector('.stepper-down') : null;
+
+      const stepDelta = (dir) => {
+        if (num.disabled) return;
+        pauseVideo();
+        const step = parseFloat(num.step) || (prop === 'fov' ? 1.0 : 0.1);
+        let cur = parseFloat(num.value);
+        if (isNaN(cur)) cur = state[prop] || 0.0;
+        cur = Math.round((cur + dir * step) * 10) / 10;
+        if (prop === 'fov') cur = Math.round(cur);
+        cur = Math.max(min, Math.min(max, cur));
+        state[prop] = cur;
+        slider.value = cur;
+        num.value = (prop === 'fov') ? Math.round(cur) : cur.toFixed(1);
+        syncActiveCheckpoint();
+        updateCameraRotation(true);
+      };
+
+      const attachRepeat = (btn, dir) => {
+        if (!btn) return;
+        let tId = null;
+        let iId = null;
+        const start = (e) => {
+          e.preventDefault();
+          stepDelta(dir);
+          tId = setTimeout(() => {
+            iId = setInterval(() => stepDelta(dir), 80);
+          }, 280);
+        };
+        const stop = () => {
+          if (tId) { clearTimeout(tId); tId = null; }
+          if (iId) { clearInterval(iId); iId = null; }
+        };
+        btn.addEventListener('mousedown', start);
+        btn.addEventListener('mouseup', stop);
+        btn.addEventListener('mouseleave', stop);
+        btn.addEventListener('touchstart', start, { passive: false });
+        btn.addEventListener('touchend', stop);
+      };
+
+      attachRepeat(btnUp, 1);
+      attachRepeat(btnDown, -1);
+
+      slider.addEventListener('input', (e) => {
+        state[prop] = parseFloat(e.target.value);
+        num.value = (prop === 'fov') ? Math.round(state[prop]) : state[prop].toFixed(1);
+        syncActiveCheckpoint();
+        updateCameraRotation(true);
+      });
+      num.addEventListener('input', (e) => {
+        const raw = e.target.value.trim();
+        if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return;
+        let val = parseFloat(raw);
+        if (!isNaN(val)) {
+          val = Math.max(min, Math.min(max, val));
+          state[prop] = val;
+          slider.value = val;
+          syncActiveCheckpoint();
+          updateCameraRotation(true);
+        }
+      });
+      num.addEventListener('change', (e) => {
+        let val = parseFloat(e.target.value);
+        if (isNaN(val)) val = 0;
+        val = Math.max(min, Math.min(max, val));
+        state[prop] = val;
+        slider.value = val;
+        num.value = (prop === 'fov') ? Math.round(val) : val.toFixed(1);
+        syncActiveCheckpoint();
+        updateCameraRotation(true);
+      });
+      num.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        pauseVideo();
+        const step = parseFloat(num.step) || (prop === 'fov' ? 1.0 : 0.1);
+        let cur = parseFloat(num.value);
+        if (isNaN(cur)) cur = state[prop] || 0.0;
+        cur += (e.deltaY < 0 ? step : -step);
+        cur = Math.round(cur * 10) / 10;
+        if (prop === 'fov') cur = Math.round(cur);
+        cur = Math.max(min, Math.min(max, cur));
+        state[prop] = cur;
+        slider.value = cur;
+        num.value = (prop === 'fov') ? Math.round(cur) : cur.toFixed(1);
+        syncActiveCheckpoint();
+        updateCameraRotation(true);
+      }, { passive: false });
+    }
+
+    bindAngleControl(sliderPitch, numPitch, 'pitch', -90, 90);
+    bindAngleControl(sliderRoll, numRoll, 'roll', -180, 180);
+    bindAngleControl(sliderYaw, numYaw, 'levelYaw', -180, 180);
+    bindAngleControl(sliderFov, numFov, 'fov', 30, 120);
+
+    document.getElementById('btnResetAngles').addEventListener('click', () => {
+      pauseVideo();
+      state.pitch = 0.0;
+      state.roll = 0.0;
+      state.levelYaw = 0.0;
+      state.viewYaw = 0.0;
+      syncActiveCheckpoint();
+      updateCameraRotation();
+    });
+
+    const btnRecenterView = document.getElementById('btnRecenterView');
+    if (btnRecenterView) {
+      btnRecenterView.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        state.viewYaw = 0.0;
+        updateCameraRotation();
+      });
+      btnRecenterView.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+      });
+      btnRecenterView.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+      });
+    }
+
+    if (hudViewYaw) {
+      hudViewYaw.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (Math.abs(state.viewYaw) > 0.01) {
+          state.viewYaw = 0.0;
+          updateCameraRotation();
+        }
+      });
+      hudViewYaw.addEventListener('mousedown', (e) => {
+        e.stopPropagation();
+      });
+      hudViewYaw.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+      });
+    }
+
+    function updateIgnoreYawUI() {
+      const isIgnored = !!state.ignoreYaw;
+      if (chkIgnoreYaw) chkIgnoreYaw.checked = isIgnored;
+
+      if (isIgnored) {
+        if (lblYawHeading) lblYawHeading.style.color = 'var(--text-muted)';
+        if (valYaw) valYaw.style.color = 'var(--text-muted)';
+        if (sliderYaw) sliderYaw.disabled = true;
+        if (numYaw) numYaw.disabled = true;
+        if (yawControlGroup) yawControlGroup.classList.add('disabled-control');
+
+        if (rowIgnoreYaw) {
+          rowIgnoreYaw.style.background = 'rgba(0, 210, 255, 0.08)';
+          rowIgnoreYaw.style.padding = '4px 6px';
+          rowIgnoreYaw.style.borderRadius = '4px';
+        }
+        if (lblIgnoreYaw) {
+          lblIgnoreYaw.style.color = 'var(--accent)';
+          lblIgnoreYaw.style.fontWeight = '600';
+        }
+      } else {
+        if (lblYawHeading) lblYawHeading.style.color = 'var(--text-main)';
+        if (valYaw) valYaw.style.color = 'var(--text-main)';
+        if (sliderYaw) sliderYaw.disabled = false;
+        if (numYaw) numYaw.disabled = false;
+        if (yawControlGroup) yawControlGroup.classList.remove('disabled-control');
+
+        if (rowIgnoreYaw) {
+          rowIgnoreYaw.style.background = 'transparent';
+          rowIgnoreYaw.style.padding = '0';
+          rowIgnoreYaw.style.borderRadius = '0';
+        }
+        if (lblIgnoreYaw) {
+          lblIgnoreYaw.style.color = 'var(--text-main)';
+          lblIgnoreYaw.style.fontWeight = 'normal';
+        }
+      }
+    }
+
+    chkIgnoreYaw.addEventListener('change', (e) => {
+      state.ignoreYaw = e.target.checked;
+      if (state.ignoreYaw) {
+        state.viewYaw = 0.0;
+      }
+      updateIgnoreYawUI();
+      renderCheckpoints();
+      updateCameraRotation();
+    });
+    updateIgnoreYawUI();
+
+    chkHorizonGuide.addEventListener('change', (e) => {
+      horizonLine.style.display = e.target.checked ? 'block' : 'none';
+      if (verticalCenterLine) verticalCenterLine.style.display = e.target.checked ? 'block' : 'none';
+    });
+    horizonLine.style.display = 'block';
+    if (verticalCenterLine) verticalCenterLine.style.display = 'block';
+
+    chkSphereGrid.addEventListener('change', (e) => {
+      gridHelperSphere.visible = e.target.checked;
+    });
+
+    chkCenterCrosshair.addEventListener('change', (e) => {
+      centerCrosshair.style.display = e.target.checked ? 'block' : 'none';
+    });
+    centerCrosshair.style.display = 'block';
+
+    chkLiveTrajectory.addEventListener('change', (e) => {
+      state.liveTrajectory = e.target.checked;
+      seekToFrame(state.currentFrame);
+    });
+
+    const btnTwoPointTool = document.getElementById('btnTwoPointTool');
+
+    btnTwoPointTool.addEventListener('click', () => {
+      pauseVideo();
+      state.isDrawing = !state.isDrawing;
+      state.drawPoints = [];
+      clearDrawCanvas();
+
+      if (state.isDrawing) {
+        btnTwoPointTool.classList.add('active');
+        webglCanvas.classList.add('draw-mode');
+        hudStatus.textContent = 'Click 2 points along horizon';
+      } else {
+        btnTwoPointTool.classList.remove('active');
+        webglCanvas.classList.remove('draw-mode');
+        hudStatus.textContent = 'Ready';
+      }
+    });
+
+    viewportContainer.addEventListener('click', (e) => {
+      if (!state.isDrawing || e.target.closest('.viewport-hud')) return;
+
+      const rect = drawCanvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      state.drawPoints.push({ x, y });
+      drawHorizonSnapLine();
+
+      if (state.drawPoints.length === 2) {
+        const p1 = state.drawPoints[0];
+        const p2 = state.drawPoints[1];
+
+        // 1. Line slope gives Roll correction relative to view
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const angleRad = Math.atan2(dy, dx);
+        const slopeDeg = THREE.MathUtils.radToDeg(angleRad);
+
+        // 2. Vertical offset from optical center (if clicked above center, move scene down)
+        const midY = (p1.y + p2.y) / 2;
+        const centerY = rect.height / 2;
+        const dElevDeg = ((centerY - midY) / rect.height) * state.fov;
+
+        // 3. Project through viewYaw onto 3D Pitch and Roll
+        const viewRad = THREE.MathUtils.degToRad(state.viewYaw);
+        const dPitch = dElevDeg * Math.cos(viewRad) + slopeDeg * Math.sin(viewRad);
+        const dRoll = dElevDeg * Math.sin(viewRad) + slopeDeg * Math.cos(viewRad);
+
+        state.pitch = Math.max(-90, Math.min(90, state.pitch + dPitch));
+        state.roll = normalizeAngle(state.roll + dRoll);
+        syncActiveCheckpoint();
+        updateCameraRotation();
+
+        setTimeout(() => {
+          state.isDrawing = false;
+          state.drawPoints = [];
+          clearDrawCanvas();
+          btnTwoPointTool.classList.remove('active');
+          webglCanvas.classList.remove('draw-mode');
+          hudStatus.textContent = `Horizon Snapped (P: ${state.pitch.toFixed(1)}°, R: ${state.roll.toFixed(1)}°)`;
+        }, 300);
+      }
+    });
+
+    function drawHorizonSnapLine() {
+      clearDrawCanvas();
+      if (state.drawPoints.length === 0) return;
+
+      drawCtx.strokeStyle = '#ff0055';
+      drawCtx.lineWidth = 2;
+      drawCtx.fillStyle = '#00d2ff';
+
+      state.drawPoints.forEach((pt) => {
+        drawCtx.beginPath();
+        drawCtx.arc(pt.x, pt.y, 5, 0, Math.PI * 2);
+        drawCtx.fill();
+        drawCtx.stroke();
+      });
+
+      if (state.drawPoints.length === 2) {
+        drawCtx.beginPath();
+        drawCtx.moveTo(state.drawPoints[0].x, state.drawPoints[0].y);
+        drawCtx.lineTo(state.drawPoints[1].x, state.drawPoints[1].y);
+        drawCtx.stroke();
+      }
+    }
+
+    function clearDrawCanvas() {
+      drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    }
+
+    const btnAddCheckpoint = document.getElementById('btnAddCheckpoint');
+    const btnDeleteCheckpoint = document.getElementById('btnDeleteCheckpoint');
+    const btnPrevCheckpoint = document.getElementById('btnPrevCheckpoint');
+    const btnNextCheckpoint = document.getElementById('btnNextCheckpoint');
+    const btnResetCheckpointsToZero = document.getElementById('btnResetCheckpointsToZero');
+    const btnClearAllCheckpoints = document.getElementById('btnClearAllCheckpoints');
+
+    btnAddCheckpoint.addEventListener('click', () => {
+      const existingIdx = state.checkpoints.findIndex(c => c.frame === state.currentFrame);
+      const cp = {
+        frame: state.currentFrame,
+        pitch: parseFloat(state.pitch.toFixed(2)),
+        roll: parseFloat(state.roll.toFixed(2)),
+        yaw: state.ignoreYaw ? 0.0 : parseFloat(state.levelYaw.toFixed(2))
+      };
+
+      if (existingIdx >= 0) {
+        state.checkpoints[existingIdx] = cp;
+      } else {
+        state.checkpoints.push(cp);
+        state.checkpoints.sort((a, b) => a.frame - b.frame);
+      }
+
+      markActiveParamsManual('Manual Snap / User Defined');
+      renderCheckpoints();
+      updateTimelineUI();
+    });
+
+    btnDeleteCheckpoint.addEventListener('click', () => {
+      const idx = state.checkpoints.findIndex(c => c.frame === state.currentFrame);
+      if (idx >= 0) {
+        state.checkpoints.splice(idx, 1);
+        if (state.checkpoints.length === 0) {
+          state.activeParams = {
+            detection_type: 'Manual Snap / Default',
+            strategy: 'Manual Snap / Default',
+            source: 'none',
+            density: 'Balanced (ε=2.5°)',
+            epsilon: '2.50',
+            baseline_pitch: 0.0,
+            baseline_roll: 0.0,
+            range_mode: 'Full Video',
+            timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+          };
+          state.paramLogDirty = true;
+          syncHorizonLogToServer();
+        } else {
+          markActiveParamsManual('Manual Snap / User Defined');
+        }
+        renderCheckpoints();
+        updateTimelineUI();
+      }
+    });
+
+    btnPrevCheckpoint.addEventListener('click', () => {
+      const prevs = state.checkpoints.filter(c => c.frame < state.currentFrame);
+      if (prevs.length > 0) {
+        seekToFrame(prevs[prevs.length - 1].frame);
+      }
+    });
+
+    btnNextCheckpoint.addEventListener('click', () => {
+      const nexts = state.checkpoints.filter(c => c.frame > state.currentFrame);
+      if (nexts.length > 0) {
+        seekToFrame(nexts[0].frame);
+      }
+    });
+
+    const btnNextCheckpointSidebar = document.getElementById('btnNextCheckpointSidebar');
+    if (btnNextCheckpointSidebar) {
+      btnNextCheckpointSidebar.addEventListener('click', () => {
+        btnNextCheckpoint.click();
+      });
+    }
+
+    if (inputGoToCheckpoint) {
+      const jumpToCp = (val) => {
+        const cpNum = parseInt(val, 10);
+        if (Number.isFinite(cpNum) && cpNum >= 1 && cpNum <= state.checkpoints.length) {
+          seekToFrame(state.checkpoints[cpNum - 1].frame);
+          inputGoToCheckpoint.value = '';
+        }
+      };
+      inputGoToCheckpoint.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          jumpToCp(inputGoToCheckpoint.value);
+        }
+      });
+      inputGoToCheckpoint.addEventListener('change', (e) => {
+        jumpToCp(e.target.value);
+      });
+    }
+
+    if (btnResetCheckpointsToZero) {
+      btnResetCheckpointsToZero.addEventListener('click', () => {
+        if (state.checkpoints.length === 0) return;
+        if (!confirm(`⚠️ Confirm Bulk Reset:\n\nAre you sure you want to reset all ${state.checkpoints.length} checkpoints to 0.0° level?\n\nThis will overwrite custom Pitch and Roll angles for all keyframes.`)) {
+          return;
+        }
+        state.checkpoints.forEach(cp => {
+          cp.pitch = 0.0;
+          cp.roll = 0.0;
+          cp.yaw = 0.0;
+        });
+        state.pitch = 0.0;
+        state.roll = 0.0;
+        state.levelYaw = 0.0;
+        markActiveParamsManual('Manual Snap / Reset 0°');
+        renderCheckpoints();
+        updateTimelineUI();
+        updateCameraRotation();
+        hudStatus.textContent = 'Reset all keyframes to 0.0°';
+      });
+    }
+
+    if (btnClearAllCheckpoints) {
+      btnClearAllCheckpoints.addEventListener('click', () => {
+        if (state.checkpoints.length === 0) return;
+        if (!confirm(`⚠️ Confirm Clear All:\n\nAre you sure you want to permanently delete all ${state.checkpoints.length} checkpoints from timeline?\n\nThis cannot be undone.`)) {
+          return;
+        }
+        state.checkpoints = [];
+        state.pitch = 0.0;
+        state.roll = 0.0;
+        state.levelYaw = 0.0;
+        state.activeParams = {
+          detection_type: 'Manual Snap / Default',
+          strategy: 'Manual Snap / Default',
+          source: 'none',
+          density: 'Balanced (ε=2.5°)',
+          epsilon: '2.50',
+          baseline_pitch: 0.0,
+          baseline_roll: 0.0,
+          range_mode: 'Full Video',
+          timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+        };
+        state.paramLogDirty = true;
+        renderCheckpoints();
+        updateTimelineUI();
+        updateCameraRotation();
+        hudStatus.textContent = 'Cleared all checkpoints (parameters reset to manual)';
+        syncHorizonLogToServer();
+      });
+    }
+
+    function markActiveParamsManual(reason = 'Manual Snap / User Defined') {
+      const prevSource = (state.activeParams && state.activeParams.source) ? state.activeParams.source.toLowerCase() : 'none';
+      if (prevSource === 'manual' && state.checkpoints.length > 0) {
+        state.paramLogDirty = true;
+        updateActiveParamsUI();
+        return;
+      }
+      state.activeParams = {
+        detection_type: (state.checkpoints.length > 0) ? reason : 'Manual Snap / Default',
+        strategy: (state.checkpoints.length > 0) ? reason : 'Manual Snap / Default',
+        source: (state.checkpoints.length > 0) ? 'manual' : 'none',
+        density: state.activeParams?.density || 'Balanced (ε=2.5°)',
+        epsilon: state.activeParams?.epsilon || '2.50',
+        baseline_pitch: parseFloat((state.pitch || 0.0).toFixed(1)),
+        baseline_roll: parseFloat((state.roll || 0.0).toFixed(1)),
+        range_mode: (state.totalFrames > 0) ? `0 - ${state.totalFrames - 1} (Full)` : 'Full Video',
+        timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+      };
+      state.paramLogDirty = true;
+      updateActiveParamsUI();
+      syncHorizonLogToServer();
+    }
+
+    function syncHorizonLogToServer() {
+      const outBase = state.outBase || '';
+      const logText = buildClientHorizonParamsLog();
+      try {
+        fetch('api/v1/jobs/sync-horizon-log' + (outBase ? '?out_base=' + encodeURIComponent(outBase) : ''), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            out_base: outBase,
+            log_text: logText,
+            video_name: state.videoName || ''
+          })
+        }).catch(err => console.debug('Async log sync notice:', err));
+      } catch (e) {}
+    }
+
+    function updateActiveParamsUI() {
+      const p = state.activeParams || {};
+      const strat = p.detection_type || p.strategy || (state.checkpoints.length > 0 ? 'Manual Snap / Loaded' : 'Manual Snap / Default');
+      const src = (p.source || (state.checkpoints.length > 0 ? 'manual' : 'none')).toLowerCase();
+      const isVision = src.includes('vision');
+      const isCadence = src.includes('cadence');
+      const isGait = src.includes('pitch') || src.includes('gait') || src.includes('extrema') || src.includes('stride');
+
+      const dens = p.density ? (p.epsilon ? `${p.density} (ε=${p.epsilon}°)` : p.density) : (p.epsilon ? `ε=${p.epsilon}°` : 'Balanced (ε=2.5°)');
+      const prom = (!isVision && !isCadence && p.min_prominence !== undefined) ? `${p.min_prominence}°` : 'N/A';
+      const damp = (!isVision && !isCadence && p.roll_damping !== undefined) ? `${p.roll_damping}x` : 'N/A';
+      const bp = p.baseline_pitch !== undefined ? `${Number(p.baseline_pitch).toFixed(1)}°` : `${(state.pitch || 0).toFixed(1)}°`;
+      const br = p.baseline_roll !== undefined ? `${Number(p.baseline_roll).toFixed(1)}°` : `${(state.roll || 0).toFixed(1)}°`;
+      const range = p.range_mode || (state.totalFrames > 0 ? `0 - ${state.totalFrames - 1} (Full)` : 'Full Video');
+      const count = `${state.checkpoints.length} keyframes`;
+      const logName = state.outBase ? `${state.outBase}_horizon_params.log` : 'horizon_params.log';
+
+      if (lblParamStrategy) lblParamStrategy.textContent = strat;
+      if (lblParamDensity) lblParamDensity.textContent = dens;
+      if (lblParamProminence) lblParamProminence.textContent = prom;
+      if (lblParamRollDamp) lblParamRollDamp.textContent = damp;
+      if (lblParamBaselinePitch) lblParamBaselinePitch.textContent = bp;
+      if (lblParamBaselineRoll) lblParamBaselineRoll.textContent = br;
+      if (lblParamRange) lblParamRange.textContent = range;
+      if (lblParamCount) lblParamCount.textContent = count;
+      if (lblParamLogFile) {
+        lblParamLogFile.textContent = logName;
+        lblParamLogFile.title = `data/runtime/work/${logName}`;
+      }
+
+      // Contextual visibility of parameters based on active strategy
+      if (rowParamDensity) {
+        rowParamDensity.style.display = (isCadence && !p.density && !p.epsilon) ? 'none' : 'flex';
+      }
+      if (rowParamOpticalTarget) {
+        rowParamOpticalTarget.style.display = isVision ? 'flex' : 'none';
+        if (lblParamOpticalTarget) {
+          lblParamOpticalTarget.textContent = (p.optical_target === 'skyline') ? 'Skyline / Canopy' : 'Ground / Road Base';
+        }
+      }
+      if (rowParamProminenceDamp) {
+        // Prominence and Roll Damping only apply to gait pitch extrema
+        rowParamProminenceDamp.style.display = isGait ? 'flex' : 'none';
+      }
+      if (rowParamBaseline) {
+        // Baseline pitch/roll is only shown when applicable or non-zero
+        const hasBaseline = (p.baseline_pitch && Math.abs(p.baseline_pitch) > 0.001) || (p.baseline_roll && Math.abs(p.baseline_roll) > 0.001);
+        rowParamBaseline.style.display = isVision ? (hasBaseline ? 'flex' : 'none') : (isCadence ? (hasBaseline ? 'flex' : 'none') : 'flex');
+      }
+
+      if (paramBadgeSource) {
+        paramBadgeSource.textContent = (src || 'MANUAL').toUpperCase();
+        if (src.includes('vision')) {
+          paramBadgeSource.style.background = '#06b6d4';
+        } else if (src.includes('cadence')) {
+          paramBadgeSource.style.background = '#8b5cf6';
+        } else if (src.includes('pitch') || src.includes('gait')) {
+          paramBadgeSource.style.background = '#10b981';
+        } else if (src.includes('telemetry') || src.includes('motion')) {
+          paramBadgeSource.style.background = '#f59e0b';
+        } else if (src === 'none') {
+          paramBadgeSource.style.background = '#64748b';
+        } else {
+          paramBadgeSource.style.background = '#0284c7';
+        }
+      }
+    }
+
+
+    function buildClientHorizonParamsLog() {
+      const p = state.activeParams || {};
+      const outB = state.outBase || 'default';
+      const ts = p.timestamp || (new Date()).toISOString().replace('T', ' ').substring(0, 19);
+      const vid = state.videoName || 'N/A';
+      const fps = state.fps || 29.97;
+      const totalF = state.totalFrames || 0;
+      const strat = p.detection_type || p.strategy || 'Manual Snap / User Defined';
+      const src = p.source || 'manual';
+      const isVision = (src || '').toLowerCase().includes('vision');
+      const isCadence = (src || '').toLowerCase().includes('cadence');
+      const dens = p.density ? (p.epsilon ? `${p.density} (ε=${p.epsilon}°)` : p.density) : 'N/A';
+      const prom = (!isVision && !isCadence && p.min_prominence !== undefined) ? `${p.min_prominence}°` : 'N/A';
+      const damp = (!isVision && !isCadence && p.roll_damping !== undefined) ? `${p.roll_damping}x` : 'N/A';
+      const bp = (p.baseline_pitch !== undefined && Math.abs(p.baseline_pitch) > 0.001) ? `${Number(p.baseline_pitch).toFixed(1)}°` : '0.0° (Neutral)';
+      const br = (p.baseline_roll !== undefined && Math.abs(p.baseline_roll) > 0.001) ? `${Number(p.baseline_roll).toFixed(1)}°` : '0.0° (Neutral)';
+      const range = p.range_mode || (totalF > 0 ? `Frames 0 - ${totalF - 1} (Full Video)` : 'Full Video');
+
+      let lines = [
+        "================================================================================",
+        "360° HORIZON STABILIZATION PARAMETER AUDIT LOG",
+        "================================================================================",
+        `Test / Target Base   : ${outB}`,
+        `Timestamp            : ${ts}`,
+        `Video Source         : ${vid}`,
+        `Framerate & Frames   : ${fps} fps | Total Frames: ${totalF}`,
+        "",
+        "STABILIZATION & DETECTION CONFIGURATION:",
+        "--------------------------------------------------------------------------------",
+        `Strategy / Mode      : ${strat}`,
+        `Detection Source     : ${src}`,
+        `Keyframe Density     : ${dens}`,
+        ...(isVision ? [`Optical Reference    : ${(p.optical_target === 'skyline') ? 'Skyline / Canopy Boundary' : 'Ground / Road Contact Line'}`] : []),
+        `Pitch Prominence     : ${prom}`,
+        `Roll Sway Damping    : ${damp}`,
+        `Baseline Pitch / Roll: Pitch: ${bp}, Roll: ${br}`,
+        `Ignore Yaw           : ${state.ignoreYaw} (Pitch & Roll level only)`,
+        `Effective Range      : ${range}`,
+        "",
+        `KEYFRAME SUMMARY (${state.checkpoints.length} Checkpoints):`,
+        "--------------------------------------------------------------------------------"
+      ];
+      if (state.checkpoints.length > 0) {
+        state.checkpoints.forEach((cp, idx) => {
+          const tSec = (cp.frame / fps).toFixed(2);
+          const pVal = Number(cp.pitch || 0).toFixed(2).padStart(6, ' ');
+          const rVal = Number(cp.roll || 0).toFixed(2).padStart(6, ' ');
+          const yVal = Number(cp.yaw || 0).toFixed(2).padStart(6, ' ');
+          const typeStr = cp.type ? ` [${cp.type}]` : '';
+          lines.push(`  [#${String(idx + 1).padStart(2, '0')}] Frame ${String(cp.frame).padStart(6, ' ')} (${tSec.padStart(6, ' ')}s) | Pitch: ${pVal}° | Roll: ${rVal}° | Yaw: ${yVal}°${typeStr}`);
+        });
+      } else {
+        lines.push("  (No keyframes recorded)");
+      }
+      lines.push("================================================================================\n");
+      return lines.join('\n');
+    }
+
+    function renderCheckpoints() {
+      checkpointCount.textContent = `${state.checkpoints.length} Keyframes`;
+      checkpointTableBody.innerHTML = '';
+      timelineKeyframes.innerHTML = '';
+
+      if ((!state.totalFrames || state.totalFrames <= 1) && state.checkpoints.length > 0) {
+        const maxCp = Math.max(...state.checkpoints.map(c => c.frame || 0), 0);
+        if (maxCp > 0) {
+          state.totalFrames = maxCp + 1;
+          inputFrame.max = state.totalFrames - 1;
+        }
+      }
+
+      state.checkpoints.forEach((cp) => {
+        const tr = document.createElement('tr');
+        if (cp.frame === state.currentFrame) tr.classList.add('active-row');
+        const yawDisplay = state.ignoreYaw ? '<span style="color:var(--text-muted);">0.0° (Locked)</span>' : `${(cp.yaw || 0).toFixed(1)}°`;
+        tr.innerHTML = `
+          <td>#${cp.frame}</td>
+          <td>${cp.pitch.toFixed(1)}°</td>
+          <td>${cp.roll.toFixed(1)}°</td>
+          <td>${yawDisplay}</td>
+          <td>
+            <button class="table-btn" onclick="seekToFrame(${cp.frame})">Go</button>
+            <button class="table-btn" style="color:var(--danger);" onclick="deleteCp(${cp.frame})">✕</button>
+          </td>
+        `;
+        checkpointTableBody.appendChild(tr);
+
+        if (state.totalFrames > 1) {
+          const marker = document.createElement('div');
+          marker.className = 'timeline-keyframe';
+          const pct = (cp.frame / (state.totalFrames - 1)) * 100;
+          marker.style.left = `${pct}%`;
+          marker.title = `Checkpoint @ frame ${cp.frame}`;
+          marker.addEventListener('click', (e) => {
+            e.stopPropagation();
+            seekToFrame(cp.frame);
+          });
+          timelineKeyframes.appendChild(marker);
+        }
+      });
+      updateCheckpointNavigatorUI();
+      updateActiveParamsUI();
+    }
+
+    window.deleteCp = function(frame) {
+      const idx = state.checkpoints.findIndex(c => c.frame === frame);
+      if (idx >= 0) {
+        state.checkpoints.splice(idx, 1);
+        if (state.checkpoints.length === 0) {
+          state.activeParams = {
+            detection_type: 'Manual Snap / Default',
+            strategy: 'Manual Snap / Default',
+            source: 'none',
+            density: 'Balanced (ε=2.5°)',
+            epsilon: '2.50',
+            baseline_pitch: 0.0,
+            baseline_roll: 0.0,
+            range_mode: 'Full Video',
+            timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+          };
+          state.paramLogDirty = true;
+          syncHorizonLogToServer();
+        } else {
+          markActiveParamsManual('Manual Snap / User Defined');
+        }
+        renderCheckpoints();
+        updateTimelineUI();
+      }
+    };
+
+    function getInterpolatedAngles(frame) {
+      const cps = state.checkpoints;
+      if (cps.length === 0) return { yaw: 0.0, pitch: state.pitch, roll: state.roll };
+      if (cps.length === 1 || frame <= cps[0].frame) {
+        return {
+          yaw: state.ignoreYaw ? 0.0 : (cps[0].yaw || 0.0),
+          pitch: cps[0].pitch,
+          roll: cps[0].roll
+        };
+      }
+      if (frame >= cps[cps.length - 1].frame) {
+        const last = cps[cps.length - 1];
+        return {
+          yaw: state.ignoreYaw ? 0.0 : (last.yaw || 0.0),
+          pitch: last.pitch,
+          roll: last.roll
+        };
+      }
+
+      let idxB = cps.findIndex(c => c.frame >= frame);
+      let idxA = idxB - 1;
+      const cpA = cps[idxA];
+      const cpB = cps[idxB];
+
+      const t = (frame - cpA.frame) / (cpB.frame - cpA.frame);
+      const easeT = 0.5 * (1 - Math.cos(t * Math.PI));
+
+      const yawA = state.ignoreYaw ? 0.0 : (cpA.yaw || 0.0);
+      const yawB = state.ignoreYaw ? 0.0 : (cpB.yaw || 0.0);
+
+      return {
+        yaw: yawA + (yawB - yawA) * easeT,
+        pitch: cpA.pitch + (cpB.pitch - cpA.pitch) * easeT,
+        roll: cpA.roll + (cpB.roll - cpA.roll) * easeT
+      };
+    }
+
+    document.getElementById('btnExportJson').addEventListener('click', () => {
+      const exportCps = state.checkpoints.map(c => ({
+        frame: c.frame,
+        pitch: c.pitch,
+        roll: c.roll,
+        yaw: state.ignoreYaw ? 0.0 : (c.yaw || 0.0)
+      }));
+
+      const exportData = {
+        version: "1.0",
+        ignoreYaw: state.ignoreYaw,
+        fps: state.fps,
+        totalFrames: state.totalFrames,
+        parameters: state.activeParams || {
+          detection_type: 'Manual Snap / User Defined',
+          source: 'manual',
+          baseline_pitch: state.pitch || 0.0,
+          baseline_roll: state.roll || 0.0,
+          timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+        },
+        checkpoints: exportCps
+      };
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'horizon_checkpoints.json';
+      a.click();
+    });
+
+    document.getElementById('btnSaveWork').addEventListener('click', async () => {
+      if (state.checkpoints.length === 0) {
+        alert('Please set at least one horizon checkpoint before saving.');
+        return;
+      }
+
+      const exportCps = state.checkpoints.map(c => ({
+        frame: c.frame,
+        pitch: c.pitch,
+        roll: c.roll,
+        yaw: state.ignoreYaw ? 0.0 : (c.yaw || 0.0)
+      }));
+
+      const exportData = {
+        version: "1.0",
+        ignoreYaw: state.ignoreYaw,
+        fps: state.fps,
+        totalFrames: state.totalFrames,
+        parameters: state.activeParams || {
+          detection_type: 'Manual Snap / User Defined',
+          source: 'manual',
+          baseline_pitch: state.pitch || 0.0,
+          baseline_roll: state.roll || 0.0,
+          timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+        },
+        checkpoints: exportCps
+      };
+
+      try {
+        const outBase = state.outBase || '';
+        const url = 'api/v1/jobs/checkpoints' + (outBase ? '?out_base=' + encodeURIComponent(outBase) : '');
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(exportData)
+        });
+        const result = await res.json();
+        if (result.status === 'success') {
+          const mainFile = result.saved_files ? result.saved_files[0] : 'data/runtime/work/horizon_checkpoints.json';
+          hudStatus.innerHTML = `<span style="color:var(--success); font-weight:bold;">Saved to ${mainFile}</span>`;
+          const allZero = exportCps.length > 0 && exportCps.every(cp => Math.abs(parseFloat(cp.pitch) || 0) < 0.015 && Math.abs(parseFloat(cp.roll) || 0) < 0.015);
+          showSaveSuccessModal(result.checkpoints_count, mainFile, allZero);
+        } else {
+          alert('Save failed: ' + (result.error || 'Unknown error'));
+        }
+      } catch (err) {
+        alert('Error saving to server: ' + err.message);
+      }
+    });
+
+    document.getElementById('btnImportJson').addEventListener('click', () => {
+      document.getElementById('jsonFileInput').click();
+    });
+
+    document.getElementById('jsonFileInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (data.checkpoints && Array.isArray(data.checkpoints)) {
+            state.checkpoints = data.checkpoints;
+            if (data.fps) state.fps = data.fps;
+            if (data.totalFrames && (!state.totalFrames || state.totalFrames <= 1)) {
+              state.totalFrames = data.totalFrames;
+              inputFrame.max = state.totalFrames - 1;
+            }
+            if (data.ignoreYaw !== undefined) {
+              state.ignoreYaw = data.ignoreYaw;
+              updateIgnoreYawUI();
+            }
+            if (data.parameters) {
+              state.activeParams = data.parameters;
+            } else {
+              state.activeParams = {
+                detection_type: data.sourceType || 'Imported JSON',
+                source: 'imported',
+                timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+              };
+            }
+            renderCheckpoints();
+            updateTimelineUI();
+            alert(`Imported ${data.checkpoints.length} horizon checkpoints successfully!`);
+          }
+        } catch (err) {
+          alert('Error parsing JSON file: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // ── Unified Auto-Detect & Cadence Modal & Generator ──────────────────
+    const modalGenerateCheckpoints = document.getElementById('modalGenerateCheckpoints');
+    const btnAutoDetect = document.getElementById('btnAutoDetect');
+    const btnAutoDetectSidebar = document.getElementById('btnAutoDetectSidebar');
+    const btnCloseGenerateModal = document.getElementById('btnCloseGenerateModal');
+    const btnCancelCadence = document.getElementById('btnCancelCadence');
+    const btnExecuteCadence = document.getElementById('btnExecuteCadence');
+
+    // Strategy Tabs & Panels
+    const btnTabCadenceTime = document.getElementById('btnTabCadenceTime');
+    const btnTabCadencePitch = document.getElementById('btnTabCadencePitch');
+    const btnTabCadenceSensor = document.getElementById('btnTabCadenceSensor');
+    const panelCadenceTime = document.getElementById('panelCadenceTime');
+    const panelCadencePitch = document.getElementById('panelCadencePitch');
+    const panelCadenceSensor = document.getElementById('panelCadenceSensor');
+
+    // Controls - Strategy 1: Cadence Presets
+    const numCadenceIntervalSec = document.getElementById('numCadenceIntervalSec');
+    const numCadenceIntervalFrames = document.getElementById('numCadenceIntervalFrames');
+    const selCadenceInitialValues = document.getElementById('selCadenceInitialValues');
+
+    // Controls - Strategy 2: Pitch Extrema
+    const rngPitchProminence = document.getElementById('rngPitchProminence');
+    const numPitchProminence = document.getElementById('numPitchProminence');
+    const lblPitchProminence = document.getElementById('lblPitchProminence');
+    const selPitchMotionSource = document.getElementById('selPitchMotionSource');
+
+    // Controls - Strategy 3: Sensor & Vision AI
+    const selAutoDetectSource = document.getElementById('selAutoDetectSource');
+    const rngAutoDetectEpsilon = document.getElementById('rngAutoDetectEpsilon');
+    const numAutoDetectEpsilon = document.getElementById('numAutoDetectEpsilon');
+    const rowAutoDetectDensity = document.getElementById('rowAutoDetectDensity');
+    const numAutoDetectBaselinePitch = document.getElementById('numAutoDetectBaselinePitch');
+    const numAutoDetectBaselineRoll = document.getElementById('numAutoDetectBaselineRoll');
+    const autoDetectContextBadge = document.getElementById('autoDetectContextBadge');
+    const chkAutoDetectLockRoll = document.getElementById('chkAutoDetectLockRoll');
+    const selAutoDetectTarget = document.getElementById('selAutoDetectTarget');
+    const rowBaselineOffsets = document.getElementById('rowBaselineOffsets');
+
+    // Shared Scope & Summary Controls
+    const rowCadenceScopeControls = document.getElementById('rowCadenceScopeControls');
+    const selCadenceScope = document.getElementById('selCadenceScope');
+    const rowCadenceCustomRange = document.getElementById('rowCadenceCustomRange');
+    const numCadenceStartFrame = document.getElementById('numCadenceStartFrame');
+    const numCadenceEndFrame = document.getElementById('numCadenceEndFrame');
+    const cadenceSummaryBox = document.getElementById('cadenceSummaryBox');
+    const cadenceCalcText = document.getElementById('cadenceCalcText');
+    const cadenceWarningBadge = document.getElementById('cadenceWarningBadge');
+    const cadenceWarningText = document.getElementById('cadenceWarningText');
+    const btnApplyAdaptiveCadence = document.getElementById('btnApplyAdaptiveCadence');
+    const chkCadenceReplaceExisting = document.getElementById('chkCadenceReplaceExisting');
+    const autoDetectStatusMsg = document.getElementById('autoDetectStatusMsg');
+
+    let activeCadenceStrategy = 'pitch';
+
+    function syncPitchProminence(val, updateInput = true) {
+      const num = parseFloat(val);
+      if (!isNaN(num)) {
+        const clamped = Math.max(0.2, Math.min(10.0, num));
+        if (rngPitchProminence) rngPitchProminence.value = Math.min(4.0, Math.max(0.2, clamped));
+        if (updateInput && numPitchProminence) numPitchProminence.value = clamped.toFixed(1);
+        if (lblPitchProminence) lblPitchProminence.textContent = `${clamped.toFixed(1)}°`;
+        updateCadenceCalculation();
+      }
+    }
+    if (rngPitchProminence) {
+      rngPitchProminence.addEventListener('input', (e) => syncPitchProminence(e.target.value, true));
+    }
+    if (numPitchProminence) {
+      numPitchProminence.addEventListener('input', (e) => {
+        const raw = e.target.value.trim();
+        if (raw === '' || raw === '.' || raw === '-') return;
+        const val = parseFloat(raw);
+        if (!isNaN(val)) {
+          if (rngPitchProminence) rngPitchProminence.value = Math.min(4.0, Math.max(0.2, val));
+          updateCadenceCalculation();
+        }
+      });
+      numPitchProminence.addEventListener('change', (e) => {
+        let val = parseFloat(e.target.value);
+        if (isNaN(val)) val = 0.2;
+        val = Math.max(0.2, Math.min(10.0, val));
+        numPitchProminence.value = val.toFixed(1);
+        if (rngPitchProminence) rngPitchProminence.value = Math.min(4.0, Math.max(0.2, val));
+        updateCadenceCalculation();
+      });
+    }
+
+    const rngRollDamping = document.getElementById('rngRollDamping');
+    const numRollDamping = document.getElementById('numRollDamping');
+    const lblRollDamping = document.getElementById('lblRollDamping');
+
+    function syncRollDamping(val, updateInput = true) {
+      const num = parseFloat(val);
+      if (!isNaN(num)) {
+        const clamped = Math.max(0.0, Math.min(1.0, num));
+        if (rngRollDamping) rngRollDamping.value = clamped.toFixed(2);
+        if (updateInput && numRollDamping) numRollDamping.value = clamped.toFixed(2);
+        if (lblRollDamping) lblRollDamping.textContent = `${clamped.toFixed(2)}×`;
+        updateCadenceCalculation();
+      }
+    }
+    if (rngRollDamping) {
+      rngRollDamping.addEventListener('input', (e) => syncRollDamping(e.target.value, true));
+    }
+    if (numRollDamping) {
+      numRollDamping.addEventListener('input', (e) => {
+        const raw = e.target.value.trim();
+        if (raw === '' || raw === '.' || raw === '-') return;
+        const val = parseFloat(raw);
+        if (!isNaN(val)) {
+          if (rngRollDamping) rngRollDamping.value = Math.max(0.0, Math.min(1.0, val)).toFixed(2);
+          updateCadenceCalculation();
+        }
+      });
+      numRollDamping.addEventListener('change', (e) => {
+        let val = parseFloat(e.target.value);
+        if (isNaN(val)) val = 0.70;
+        val = Math.max(0.0, Math.min(1.0, val));
+        numRollDamping.value = val.toFixed(2);
+        if (rngRollDamping) rngRollDamping.value = val.toFixed(2);
+        updateCadenceCalculation();
+      });
+    }
+
+    function syncAutoDetectEpsilon(val, updateInput = true) {
+      const num = parseFloat(val);
+      if (!isNaN(num)) {
+        const clamped = Math.max(0.1, Math.min(10.0, num));
+        if (rngAutoDetectEpsilon) rngAutoDetectEpsilon.value = Math.min(4.0, Math.max(0.2, clamped)).toFixed(2);
+        if (updateInput && numAutoDetectEpsilon) numAutoDetectEpsilon.value = clamped.toFixed(2);
+      }
+    }
+    if (rngAutoDetectEpsilon) {
+      rngAutoDetectEpsilon.addEventListener('input', (e) => syncAutoDetectEpsilon(e.target.value, true));
+    }
+    if (numAutoDetectEpsilon) {
+      numAutoDetectEpsilon.addEventListener('input', (e) => {
+        const raw = e.target.value.trim();
+        if (raw === '' || raw === '.' || raw === '-') return;
+        const val = parseFloat(raw);
+        if (!isNaN(val)) {
+          if (rngAutoDetectEpsilon) rngAutoDetectEpsilon.value = Math.min(4.0, Math.max(0.2, val)).toFixed(2);
+        }
+      });
+      numAutoDetectEpsilon.addEventListener('change', (e) => {
+        let val = parseFloat(e.target.value);
+        if (isNaN(val)) val = 1.5;
+        val = Math.max(0.1, Math.min(10.0, val));
+        numAutoDetectEpsilon.value = val.toFixed(2);
+        if (rngAutoDetectEpsilon) rngAutoDetectEpsilon.value = Math.min(4.0, Math.max(0.2, val)).toFixed(2);
+      });
+    }
+
+    function updateAutoDetectSourceUI() {
+      const src = selAutoDetectSource ? selAutoDetectSource.value : 'auto';
+      if (typeof rowBaselineOffsets !== 'undefined' && rowBaselineOffsets) {
+        rowBaselineOffsets.style.display = (src === 'vision') ? 'none' : 'flex';
+      }
+    }
+    if (selAutoDetectSource) {
+      selAutoDetectSource.addEventListener('change', updateAutoDetectSourceUI);
+    }
+
+    function isCurrentVideoPostStabilized() {
+      const v = (state.videoName || '').toLowerCase();
+      return v.includes('_telemetry') || v.includes('_kopf') || v.includes('_kabsch') || v.includes('_vidstab') || v.includes('_horizon') || v.includes('_3_') || v.includes('_optical');
+    }
+
+    function extractPitchExtremaFromTrajectory(startF, endF, minProminence = 1.0) {
+      if (!state.checkpoints || state.checkpoints.length < 2) return [];
+      const n = endF - startF + 1;
+      if (n < 3) return [];
+
+      const pitches = new Float64Array(n);
+      for (let i = 0; i < n; i++) {
+        pitches[i] = getInterpolatedAngles(startF + i).pitch;
+      }
+
+      const smoothed = new Float64Array(n);
+      for (let i = 0; i < n; i++) {
+        const pPrev = pitches[Math.max(0, i - 1)];
+        const pCurr = pitches[i];
+        const pNext = pitches[Math.min(n - 1, i + 1)];
+        smoothed[i] = 0.25 * pPrev + 0.5 * pCurr + 0.25 * pNext;
+      }
+
+      const candidates = [];
+      for (let i = 1; i < n - 1; i++) {
+        const d1 = smoothed[i] - smoothed[i - 1];
+        const d2 = smoothed[i + 1] - smoothed[i];
+        if (d1 > 0 && d2 < 0) {
+          candidates.push({ frame: startF + i, type: 'crest', val: smoothed[i] });
+        } else if (d1 < 0 && d2 > 0) {
+          candidates.push({ frame: startF + i, type: 'trough', val: smoothed[i] });
+        }
+      }
+
+      const filtered = [];
+      for (let i = 0; i < candidates.length; i++) {
+        const c = candidates[i];
+        const prevVal = (i > 0) ? candidates[i - 1].val : smoothed[0];
+        const nextVal = (i < candidates.length - 1) ? candidates[i + 1].val : smoothed[n - 1];
+        const prom = Math.max(Math.abs(c.val - prevVal), Math.abs(c.val - nextVal));
+        if (prom >= minProminence) {
+          filtered.push(c);
+        }
+      }
+
+      return filtered;
+    }
+
+    function getCadenceEffectiveRange() {
+      const totalF = state.totalFrames || 300;
+      const fps = state.fps || 29.97;
+      const currentF = state.currentFrame || 0;
+      const scope = selCadenceScope ? selCadenceScope.value : 'all';
+
+      let startF = 0;
+      let endF = totalF - 1;
+
+      if (scope === 'playhead_10') {
+        const windowF = Math.round(fps * 5);
+        startF = Math.max(0, currentF - windowF);
+        endF = Math.min(totalF - 1, currentF + windowF);
+      } else if (scope === 'playhead_30') {
+        const windowF = Math.round(fps * 15);
+        startF = Math.max(0, currentF - windowF);
+        endF = Math.min(totalF - 1, currentF + windowF);
+      } else if (scope === 'custom') {
+        const s = parseInt(numCadenceStartFrame.value, 10);
+        const e = parseInt(numCadenceEndFrame.value, 10);
+        startF = isNaN(s) ? 0 : Math.max(0, Math.min(totalF - 1, s));
+        endF = isNaN(e) ? (totalF - 1) : Math.max(startF, Math.min(totalF - 1, e));
+      }
+
+      const countFrames = Math.max(1, endF - startF + 1);
+      const durationSec = countFrames / fps;
+      return { startF, endF, countFrames, durationSec };
+    }
+
+    function updateCadenceCalculation() {
+      const fps = state.fps || 29.97;
+      const range = getCadenceEffectiveRange();
+
+      if (activeCadenceStrategy === 'pitch') {
+        const prominence = parseFloat(numPitchProminence ? numPitchProminence.value : (rngPitchProminence ? rngPitchProminence.value : 0.8)) || 0.8;
+        if (state.checkpoints && state.checkpoints.length >= 2) {
+          const extrema = extractPitchExtremaFromTrajectory(range.startF, range.endF, prominence);
+          const crests = extrema.filter(e => e.type === 'crest').length;
+          const troughs = extrema.filter(e => e.type === 'trough').length;
+          cadenceCalcText.innerHTML = `Pitch Extrema (Trajectory): <b>${extrema.length} keyframes</b> (${crests} crests, ${troughs} troughs with &ge;${prominence.toFixed(1)}° swing) across ${range.durationSec.toFixed(1)}s.`;
+        } else {
+          cadenceCalcText.innerHTML = `Pitch Extrema (Motion/Telemetry): Turning points with <b>&ge;${prominence.toFixed(1)}° swing</b> across ${range.durationSec.toFixed(1)}s (f${range.startF} to f${range.endF}). Flat sections generate 0 CPs.`;
+        }
+        if (cadenceWarningBadge) cadenceWarningBadge.style.display = 'none';
+        return;
+      }
+
+      // Time Interval Cadence
+      const stepSec = Math.max(0.05, parseFloat(numCadenceIntervalSec.value) || 0.5);
+      const stepFrames = Math.max(1, Math.round(fps * stepSec));
+      const expectedCount = Math.floor((range.endF - range.startF) / stepFrames) + 1;
+
+      cadenceCalcText.innerHTML = `Calculated: <b>${expectedCount} keyframe(s)</b> across ${range.durationSec.toFixed(1)}s (${range.countFrames} frames, from f${range.startF} to f${range.endF}).`;
+
+      if (expectedCount > 60) {
+        cadenceWarningBadge.style.display = 'block';
+        const adaptiveSec = Math.max(0.5, (range.durationSec / 50));
+        cadenceWarningText.textContent = `${expectedCount} keyframes may slow down interpolation or clutter the timeline.`;
+        btnApplyAdaptiveCadence.setAttribute('data-target-sec', adaptiveSec.toFixed(2));
+        btnApplyAdaptiveCadence.textContent = `Use Adaptive ${adaptiveSec.toFixed(1)}s (~50 CPs)`;
+      } else {
+        cadenceWarningBadge.style.display = 'none';
+      }
+
+      // Update preset buttons visual active state
+      document.querySelectorAll('.cadence-preset-btn').forEach(btn => {
+        const pSec = parseFloat(btn.getAttribute('data-sec'));
+        if (Math.abs(pSec - stepSec) < 0.05) {
+          btn.style.borderColor = 'var(--accent)';
+          btn.style.background = 'rgba(0, 210, 255, 0.15)';
+        } else {
+          btn.style.borderColor = 'var(--border-color)';
+          btn.style.background = 'var(--bg-card)';
+        }
+      });
+    }
+
+    function setCadenceStrategy(strategy) {
+      activeCadenceStrategy = strategy;
+      const tabs = [
+        { id: 'time', btn: btnTabCadenceTime, panel: panelCadenceTime },
+        { id: 'pitch', btn: btnTabCadencePitch, panel: panelCadencePitch },
+        { id: 'sensor', btn: btnTabCadenceSensor, panel: panelCadenceSensor }
+      ];
+
+      tabs.forEach(t => {
+        const isActive = (t.id === strategy);
+        if (t.btn) {
+          t.btn.style.background = isActive ? 'var(--accent)' : 'transparent';
+          t.btn.style.color = isActive ? '#fff' : 'var(--text-muted)';
+        }
+        if (t.panel) {
+          t.panel.style.display = isActive ? 'flex' : 'none';
+        }
+      });
+
+      if (rowCadenceScopeControls) {
+        rowCadenceScopeControls.style.display = (strategy === 'sensor') ? 'none' : 'block';
+      }
+      if (cadenceSummaryBox) {
+        cadenceSummaryBox.style.display = (strategy === 'sensor') ? 'none' : 'block';
+      }
+      if (btnExecuteCadence) {
+        if (strategy === 'sensor') {
+          btnExecuteCadence.textContent = '⚡ Detect Visual Horizon';
+          btnExecuteCadence.style.background = '#0284c7';
+          btnExecuteCadence.style.borderColor = '#0284c7';
+        } else if (strategy === 'pitch') {
+          btnExecuteCadence.textContent = '⚡ Auto-Detect Stride Checkpoints';
+          btnExecuteCadence.style.background = '#0284c7';
+          btnExecuteCadence.style.borderColor = '#0284c7';
+        } else {
+          btnExecuteCadence.textContent = '✔ Seed Cadence Keyframes';
+          btnExecuteCadence.style.background = '#10b981';
+          btnExecuteCadence.style.borderColor = '#10b981';
+        }
+      }
+
+      if (strategy === 'sensor') {
+        updateAutoDetectSourceUI();
+      } else {
+        updateCadenceCalculation();
+      }
+
+      if (state.checkpoints.length === 0) {
+        if (strategy === 'sensor') {
+          const eps = (numAutoDetectEpsilon && Number.isFinite(parseFloat(numAutoDetectEpsilon.value))) ? parseFloat(numAutoDetectEpsilon.value) : 1.50;
+          const dens = (eps <= 0.8) ? 'ultra' : ((eps <= 1.8) ? 'fine' : ((eps <= 2.8) ? 'balanced' : 'smooth'));
+          const lockRoll = chkAutoDetectLockRoll ? chkAutoDetectLockRoll.checked : true;
+          state.activeParams = {
+            detection_type: lockRoll ? 'Visual Horizon AI (Pitch-Only)' : 'Visual Horizon AI',
+            strategy: lockRoll ? 'Visual Horizon AI (Pitch-Only)' : 'Visual Horizon AI',
+            source: 'vision',
+            density: `${dens} (ε=${eps.toFixed(2)}°)`,
+            epsilon: eps.toFixed(2),
+            optical_target: selAutoDetectTarget ? selAutoDetectTarget.value : 'ground',
+            baseline_pitch: parseFloat((state.pitch || 0.0).toFixed(1)),
+            baseline_roll: lockRoll ? 0.0 : parseFloat((state.roll || 0.0).toFixed(1)),
+            lock_roll: lockRoll,
+            range_mode: 'Full Video',
+            timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+          };
+        } else if (strategy === 'pitch') {
+          const prom = (numPitchProminence && Number.isFinite(parseFloat(numPitchProminence.value))) ? parseFloat(numPitchProminence.value) : 0.8;
+          const damp = (numRollDamping && Number.isFinite(parseFloat(numRollDamping.value))) ? parseFloat(numRollDamping.value) : 0.7;
+          state.activeParams = {
+            detection_type: 'Smart Gait & Stride AI',
+            strategy: 'Smart Gait & Stride AI',
+            source: 'pitch_extrema',
+            density: (prom <= 0.5) ? 'Fine' : ((prom <= 1.0) ? 'Balanced' : 'Smooth'),
+            min_prominence: prom,
+            roll_damping: damp,
+            baseline_pitch: parseFloat((state.pitch || 0.0).toFixed(1)),
+            baseline_roll: parseFloat((state.roll || 0.0).toFixed(1)),
+            range_mode: 'Full Video',
+            timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+          };
+        } else {
+          const stepSec = (numCadenceIntervalSec && Number.isFinite(parseFloat(numCadenceIntervalSec.value))) ? parseFloat(numCadenceIntervalSec.value) : 1.0;
+          state.activeParams = {
+            detection_type: 'Time Interval Cadence',
+            strategy: 'Time Interval Cadence',
+            source: 'cadence',
+            density: `${stepSec}s interval`,
+            interval_sec: stepSec,
+            baseline_pitch: parseFloat((state.pitch || 0.0).toFixed(1)),
+            baseline_roll: parseFloat((state.roll || 0.0).toFixed(1)),
+            range_mode: 'Full Video',
+            timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+          };
+        }
+        state.paramLogDirty = true;
+        updateActiveParamsUI();
+        syncHorizonLogToServer();
+      }
+    }
+
+    if (btnTabCadenceTime) btnTabCadenceTime.addEventListener('click', () => setCadenceStrategy('time'));
+    if (btnTabCadencePitch) btnTabCadencePitch.addEventListener('click', () => setCadenceStrategy('pitch'));
+    if (btnTabCadenceSensor) btnTabCadenceSensor.addEventListener('click', () => setCadenceStrategy('sensor'));
+
+    function openGenerateModal(preferredStrategy = 'pitch') {
+      if (autoDetectStatusMsg) {
+        autoDetectStatusMsg.style.display = 'none';
+        autoDetectStatusMsg.textContent = '';
+      }
+      if (btnExecuteCadence) {
+        btnExecuteCadence.disabled = false;
+      }
+
+      const postStab = isCurrentVideoPostStabilized();
+      if (autoDetectContextBadge) {
+        if (postStab) {
+          autoDetectContextBadge.style.display = 'block';
+          autoDetectContextBadge.textContent = 'ℹ️ Post-Stabilized Video: Optical analysis detects horizon line tilt directly from video frames (pure computer vision, no sensor telemetry required).';
+        } else {
+          autoDetectContextBadge.style.display = 'block';
+          autoDetectContextBadge.textContent = 'ℹ️ Optical Analysis: Analyzes video frames directly without requiring gyro telemetry.';
+        }
+      }
+      if (selAutoDetectSource) {
+        selAutoDetectSource.value = 'vision';
+      }
+
+      const totalF = state.totalFrames || 300;
+      if (numCadenceEndFrame) numCadenceEndFrame.value = Math.max(1, totalF - 1);
+      if (numCadenceStartFrame) numCadenceStartFrame.value = 0;
+
+      if (numAutoDetectBaselinePitch && (!numAutoDetectBaselinePitch.value || numAutoDetectBaselinePitch.value === '0.0')) {
+        numAutoDetectBaselinePitch.value = (state.pitch || 0.0).toFixed(1);
+      }
+      if (numAutoDetectBaselineRoll && (!numAutoDetectBaselineRoll.value || numAutoDetectBaselineRoll.value === '0.0')) {
+        numAutoDetectBaselineRoll.value = (state.roll || 0.0).toFixed(1);
+      }
+
+      setCadenceStrategy(preferredStrategy);
+      if (modalGenerateCheckpoints) modalGenerateCheckpoints.style.display = 'flex';
+    }
+
+    function closeGenerateModal() {
+      if (modalGenerateCheckpoints) modalGenerateCheckpoints.style.display = 'none';
+    }
+
+    if (btnAutoDetect) btnAutoDetect.addEventListener('click', () => openGenerateModal('pitch'));
+    if (btnAutoDetectSidebar) btnAutoDetectSidebar.addEventListener('click', () => openGenerateModal('pitch'));
+    if (btnCloseGenerateModal) btnCloseGenerateModal.addEventListener('click', closeGenerateModal);
+    if (btnCancelCadence) btnCancelCadence.addEventListener('click', closeGenerateModal);
+    // Prevent accidental dismissal when clicking on backdrop; close explicitly via 'X', 'Cancel', or Esc
+
+    document.querySelectorAll('.cadence-preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sec = parseFloat(btn.getAttribute('data-sec'));
+        if (sec && Number.isFinite(sec)) {
+          numCadenceIntervalSec.value = sec.toFixed(1);
+          const fps = state.fps || 29.97;
+          numCadenceIntervalFrames.value = Math.max(1, Math.round(fps * sec));
+          updateCadenceCalculation();
+        }
+      });
+    });
+
+    if (numCadenceIntervalSec) {
+      numCadenceIntervalSec.addEventListener('input', () => {
+        const sec = parseFloat(numCadenceIntervalSec.value);
+        if (sec && Number.isFinite(sec) && sec > 0) {
+          const fps = state.fps || 29.97;
+          numCadenceIntervalFrames.value = Math.max(1, Math.round(fps * sec));
+          updateCadenceCalculation();
+        }
+      });
+    }
+
+    if (numCadenceIntervalFrames) {
+      numCadenceIntervalFrames.addEventListener('input', () => {
+        const frames = parseInt(numCadenceIntervalFrames.value, 10);
+        if (frames && Number.isFinite(frames) && frames > 0) {
+          const fps = state.fps || 29.97;
+          numCadenceIntervalSec.value = (frames / fps).toFixed(2);
+          updateCadenceCalculation();
+        }
+      });
+    }
+
+    if (selCadenceScope) {
+      selCadenceScope.addEventListener('change', () => {
+        if (rowCadenceCustomRange) {
+          rowCadenceCustomRange.style.display = (selCadenceScope.value === 'custom') ? 'flex' : 'none';
+        }
+        updateCadenceCalculation();
+      });
+    }
+
+    if (numCadenceStartFrame) numCadenceStartFrame.addEventListener('input', updateCadenceCalculation);
+    if (numCadenceEndFrame) numCadenceEndFrame.addEventListener('input', updateCadenceCalculation);
+
+    if (btnApplyAdaptiveCadence) {
+      btnApplyAdaptiveCadence.addEventListener('click', () => {
+        const targetSec = parseFloat(btnApplyAdaptiveCadence.getAttribute('data-target-sec')) || 1.0;
+        numCadenceIntervalSec.value = targetSec.toFixed(2);
+        const fps = state.fps || 29.97;
+        numCadenceIntervalFrames.value = Math.max(1, Math.round(fps * targetSec));
+        updateCadenceCalculation();
+      });
+    }
+
+    if (btnExecuteCadence) {
+      btnExecuteCadence.addEventListener('click', async () => {
+        const fps = state.fps || 29.97;
+        const replaceExisting = chkCadenceReplaceExisting ? chkCadenceReplaceExisting.checked : true;
+
+        if (activeCadenceStrategy === 'sensor') {
+          // ── Strategy 3: Visual Horizon AI ──────────────────────────────
+          btnExecuteCadence.disabled = true;
+          btnExecuteCadence.textContent = 'Analyzing (0s)...';
+          if (autoDetectStatusMsg) {
+            autoDetectStatusMsg.style.display = 'none';
+          }
+          const analyzeStartTime = Date.now();
+          const analyzeTimer = setInterval(() => {
+            const elapsedSec = Math.floor((Date.now() - analyzeStartTime) / 1000);
+            btnExecuteCadence.textContent = `Analyzing (${elapsedSec}s)...`;
+          }, 1000);
+
+          try {
+            const outBase = state.outBase || '';
+            const video = state.videoName || '';
+            const source = (selAutoDetectSource && selAutoDetectSource.value) ? selAutoDetectSource.value : 'vision';
+            const epsVal = (numAutoDetectEpsilon && Number.isFinite(parseFloat(numAutoDetectEpsilon.value)))
+              ? parseFloat(numAutoDetectEpsilon.value)
+              : ((rngAutoDetectEpsilon && Number.isFinite(parseFloat(rngAutoDetectEpsilon.value))) ? parseFloat(rngAutoDetectEpsilon.value) : 1.50);
+            const density = (epsVal <= 0.8) ? 'ultra' : ((epsVal <= 1.8) ? 'fine' : ((epsVal <= 2.8) ? 'balanced' : 'smooth'));
+            const lockRoll = chkAutoDetectLockRoll ? chkAutoDetectLockRoll.checked : true;
+            const opticalTarget = selAutoDetectTarget ? selAutoDetectTarget.value : 'ground';
+            const baselinePitch = (numAutoDetectBaselinePitch && Number.isFinite(parseFloat(numAutoDetectBaselinePitch.value)))
+              ? parseFloat(numAutoDetectBaselinePitch.value)
+              : (state.pitch || 0.0);
+            const baselineRoll = (numAutoDetectBaselineRoll && Number.isFinite(parseFloat(numAutoDetectBaselineRoll.value)))
+              ? parseFloat(numAutoDetectBaselineRoll.value)
+              : (state.roll || 0.0);
+
+            const queryParams = new URLSearchParams({
+              action: 'auto_detect_horizon_checkpoints',
+              out_base: outBase,
+              video: video,
+              source: source,
+              density: density,
+              epsilon: epsVal.toFixed(2),
+              optical_target: opticalTarget,
+              baseline_pitch: baselinePitch,
+              baseline_roll: lockRoll ? 0.0 : baselineRoll,
+              lock_roll: lockRoll ? '1' : '0',
+              fps: fps
+            });
+
+            const res = await fetch(`api/v1/jobs/detect-checkpoints?${queryParams.toString()}`);
+            const result = await res.json();
+
+            if (result.status === 'success' && result.data && Array.isArray(result.data.checkpoints)) {
+              if (lockRoll) {
+                result.data.checkpoints.forEach(cp => { cp.roll = 0.0; });
+              }
+              if (result.data.parameters) {
+                state.activeParams = result.data.parameters;
+                if (lockRoll) {
+                  state.activeParams.lock_roll = true;
+                  state.activeParams.baseline_roll = 0.0;
+                }
+                if (!state.activeParams.optical_target) {
+                  state.activeParams.optical_target = opticalTarget;
+                }
+              } else {
+                state.activeParams = {
+                  detection_type: (source === 'vision') ? (lockRoll ? 'Visual Horizon AI (Pitch-Only)' : 'Visual Horizon AI') : `IMU ${source}`,
+                  source: source,
+                  density: density,
+                  optical_target: opticalTarget,
+                  epsilon: epsVal,
+                  baseline_pitch: baselinePitch,
+                  baseline_roll: lockRoll ? 0.0 : baselineRoll,
+                  lock_roll: lockRoll,
+                  range_mode: 'Full Video',
+                  timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+                };
+              }
+              if (replaceExisting) {
+                state.checkpoints = result.data.checkpoints;
+              } else {
+                const cpMap = new Map();
+                state.checkpoints.forEach(cp => cpMap.set(cp.frame, cp));
+                result.data.checkpoints.forEach(cp => cpMap.set(cp.frame, cp));
+                state.checkpoints = Array.from(cpMap.values()).sort((a, b) => a.frame - b.frame);
+              }
+              if (result.data.fps) state.fps = result.data.fps;
+              if (result.data.ignoreYaw !== undefined) {
+                state.ignoreYaw = result.data.ignoreYaw;
+                updateIgnoreYawUI();
+              }
+              state.paramLogDirty = false;
+              renderCheckpoints();
+              updateTimelineUI();
+              updateCameraRotation();
+              syncHorizonLogToServer();
+
+              let sourceLabel = 'IMU Telemetry';
+              if (result.source === 'neutral') sourceLabel = '0.0° Neutral Baseline';
+              else if (result.source === 'vision') sourceLabel = 'Visual Horizon AI';
+              else if (result.source === 'motion') sourceLabel = 'Motion Tracker';
+
+              hudStatus.textContent = `Auto-detected ${result.checkpoints_count} keyframes (${sourceLabel})`;
+              closeGenerateModal();
+              alert(`Successfully generated ${result.checkpoints_count} keyframes using ${sourceLabel}!\n\nYou can now step through keyframes and use the 2-Point Horizon Snap Tool or sliders to fine-tune visual level.`);
+            } else {
+              if (autoDetectStatusMsg) {
+                autoDetectStatusMsg.style.display = 'block';
+                autoDetectStatusMsg.textContent = 'Failed: ' + (result.error || 'No motion or telemetry data found.');
+              }
+              alert('Auto-detection could not extract keyframes: ' + (result.error || 'No candidate telemetry, motion file, or video found.'));
+            }
+          } catch (err) {
+            if (autoDetectStatusMsg) {
+              autoDetectStatusMsg.style.display = 'block';
+              autoDetectStatusMsg.textContent = 'Error: ' + err.message;
+            }
+            alert('Request error during auto-detection: ' + err.message);
+          } finally {
+            clearInterval(analyzeTimer);
+            btnExecuteCadence.disabled = false;
+            btnExecuteCadence.textContent = '⚡ Detect Visual Horizon';
+          }
+          return;
+        }
+
+        // ── Strategy 1 (Time) & Strategy 2 (Pitch Extrema) ──────────────
+        const range = getCadenceEffectiveRange();
+        const initValMode = selCadenceInitialValues ? selCadenceInitialValues.value : 'auto';
+        const curAngles = {
+          pitch: (numPitch && Number.isFinite(parseFloat(numPitch.value))) ? parseFloat(numPitch.value) : (state.pitch || 0.0),
+          roll: (numRoll && Number.isFinite(parseFloat(numRoll.value))) ? parseFloat(numRoll.value) : (state.roll || 0.0),
+          yaw: (numYaw && Number.isFinite(parseFloat(numYaw.value))) ? parseFloat(numYaw.value) : (state.yaw || 0.0)
+        };
+
+        let newCps = [];
+
+        if (activeCadenceStrategy === 'pitch') {
+          const prominence = parseFloat(numPitchProminence ? numPitchProminence.value : (rngPitchProminence ? rngPitchProminence.value : 0.8)) || 0.8;
+          const rollDamp = parseFloat(numRollDamping ? numRollDamping.value : (rngRollDamping ? rngRollDamping.value : 0.70)) || 0.70;
+          const motionSrc = selPitchMotionSource ? selPitchMotionSource.value : 'auto';
+          btnExecuteCadence.disabled = true;
+          btnExecuteCadence.textContent = 'Detecting gait pitch extrema (0s)...';
+          if (autoDetectStatusMsg) {
+            autoDetectStatusMsg.style.display = 'none';
+          }
+          const peakStartTime = Date.now();
+          const peakTimer = setInterval(() => {
+            const elapsedSec = Math.floor((Date.now() - peakStartTime) / 1000);
+            btnExecuteCadence.textContent = `Detecting gait pitch extrema (${elapsedSec}s)...`;
+          }, 1000);
+
+          try {
+            let serverCps = null;
+            if (motionSrc !== 'existing' && (state.outBase || state.videoName)) {
+              const queryParams = new URLSearchParams({
+                action: 'auto_detect_horizon_checkpoints',
+                out_base: state.outBase || '',
+                video: state.videoName || '',
+                source: (motionSrc === 'auto') ? 'pitch_extrema' : motionSrc,
+                min_prominence: prominence,
+                roll_damping: rollDamp,
+                fps: fps,
+                total_frames: state.totalFrames || 300
+              });
+              const res = await fetch(`api/v1/jobs/detect-checkpoints?${queryParams.toString()}`);
+              const result = await res.json();
+              if (result.status === 'success' && result.data && Array.isArray(result.data.checkpoints) && result.data.checkpoints.length > 0) {
+                serverCps = result.data.checkpoints;
+              }
+            }
+
+            if (serverCps && serverCps.length > 0) {
+              newCps = serverCps.filter(c => c.frame >= range.startF && c.frame <= range.endF);
+            } else if (state.checkpoints && state.checkpoints.length >= 2) {
+              const extrema = extractPitchExtremaFromTrajectory(range.startF, range.endF, prominence);
+              const frames = [range.startF, ...extrema.map(e => e.frame)];
+              if (!frames.includes(range.endF)) frames.push(range.endF);
+              frames.sort((a, b) => a - b);
+              const uniqueFrames = Array.from(new Set(frames));
+
+              newCps = uniqueFrames.map(f => {
+                let p = 0.0, r = 0.0, y = 0.0;
+                if (initValMode === 'current') {
+                  p = curAngles.pitch; r = curAngles.roll; y = curAngles.yaw;
+                } else if (initValMode === 'interpolate') {
+                  const interp = getInterpolatedAngles(f);
+                  p = interp.pitch; r = interp.roll; y = interp.yaw;
+                }
+                return {
+                  frame: f,
+                  time: +(f / fps).toFixed(2),
+                  pitch: +p.toFixed(2),
+                  roll: +r.toFixed(2),
+                  yaw: +y.toFixed(2)
+                };
+              });
+            } else {
+              alert('Could not detect pitch extrema: no server telemetry/motion file found and no existing checkpoints trajectory to analyze.\n\nTip: You can use "Cadence Presets" to place initial keyframes, or ensure telemetry files are available.');
+              btnExecuteCadence.disabled = false;
+              btnExecuteCadence.textContent = '⚡ Detect Pitch Extrema';
+              return;
+            }
+          } catch (err) {
+            console.warn('Server pitch extrema detect error, falling back to trajectory:', err);
+            if (state.checkpoints && state.checkpoints.length >= 2) {
+              const extrema = extractPitchExtremaFromTrajectory(range.startF, range.endF, prominence);
+              const frames = Array.from(new Set([range.startF, ...extrema.map(e => e.frame), range.endF])).sort((a, b) => a - b);
+              newCps = frames.map(f => ({
+                frame: f,
+                time: +(f / fps).toFixed(2),
+                pitch: (initValMode === 'current') ? curAngles.pitch : (initValMode === 'interpolate' ? getInterpolatedAngles(f).pitch : 0.0),
+                roll: (initValMode === 'current') ? curAngles.roll : (initValMode === 'interpolate' ? getInterpolatedAngles(f).roll : 0.0),
+                yaw: (initValMode === 'current') ? curAngles.yaw : (initValMode === 'interpolate' ? getInterpolatedAngles(f).yaw : 0.0)
+              }));
+            }
+            state.activeParams = {
+              detection_type: 'Smart Gait & Stride AI',
+              source: motionSrc,
+              density: (prominence <= 0.5) ? 'Fine' : ((prominence <= 1.0) ? 'Balanced' : 'Smooth'),
+              min_prominence: prominence,
+              roll_damping: rollDamp,
+              baseline_pitch: curAngles.pitch,
+              baseline_roll: curAngles.roll,
+              range_mode: (range.mode === 'full') ? 'Full Video' : `Frames ${range.startF} - ${range.endF}`,
+              timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+            };
+          } finally {
+            clearInterval(peakTimer);
+            btnExecuteCadence.disabled = false;
+            btnExecuteCadence.textContent = '⚡ Auto-Detect Stride Checkpoints';
+          }
+        } else {
+          // Time Interval Cadence Presets
+          const stepSec = Math.max(0.05, parseFloat(numCadenceIntervalSec.value) || 0.5);
+          const stepFrames = Math.max(1, Math.round(fps * stepSec));
+
+          // If "Sample Real Telemetry / Motion" is chosen, query the server cadence endpoint
+          if (initValMode === 'auto' && (state.outBase || state.videoName)) {
+            btnExecuteCadence.disabled = true;
+            btnExecuteCadence.textContent = 'Sampling Motion Data...';
+            try {
+              const queryParams = new URLSearchParams({
+                action: 'auto_detect_horizon_checkpoints',
+                out_base: state.outBase || '',
+                video: state.videoName || '',
+                source: 'cadence',
+                cadence_sec: stepSec,
+                fps: fps,
+                total_frames: state.totalFrames || 300
+              });
+              const res = await fetch(`api/v1/jobs/detect-checkpoints?${queryParams.toString()}`);
+              const result = await res.json();
+              if (result.status === 'success' && result.data && Array.isArray(result.data.checkpoints) && result.data.checkpoints.length > 0) {
+                newCps = result.data.checkpoints.filter(c => c.frame >= range.startF && c.frame <= range.endF);
+              }
+            } catch (err) {
+              console.warn('Server cadence sampling error, falling back to local layout:', err);
+            } finally {
+              btnExecuteCadence.disabled = false;
+              btnExecuteCadence.textContent = '✔ Seed Cadence Keyframes';
+            }
+          }
+
+          // Local interval generation fallback
+          if (newCps.length === 0) {
+            for (let f = range.startF; f <= range.endF; f += stepFrames) {
+              let p = 0.0, r = 0.0, y = 0.0;
+              if (initValMode === 'current') {
+                p = curAngles.pitch; r = curAngles.roll; y = curAngles.yaw;
+              } else if (initValMode === 'interpolate' && state.checkpoints && state.checkpoints.length > 0) {
+                const interp = getInterpolatedAngles(f);
+                p = interp.pitch; r = interp.roll; y = interp.yaw;
+              }
+              newCps.push({
+                frame: f,
+                time: +(f / fps).toFixed(2),
+                pitch: +p.toFixed(2),
+                roll: +r.toFixed(2),
+                yaw: +y.toFixed(2)
+              });
+            }
+            if (newCps.length > 0 && newCps[newCps.length - 1].frame !== range.endF) {
+              let p = 0.0, r = 0.0, y = 0.0;
+              if (initValMode === 'current') {
+                p = curAngles.pitch; r = curAngles.roll; y = curAngles.yaw;
+              } else if (initValMode === 'interpolate' && state.checkpoints && state.checkpoints.length > 0) {
+                const interp = getInterpolatedAngles(range.endF);
+                p = interp.pitch; r = interp.roll; y = interp.yaw;
+              }
+              newCps.push({
+                frame: range.endF,
+                time: +(range.endF / fps).toFixed(2),
+                pitch: +p.toFixed(2),
+                roll: +r.toFixed(2),
+                yaw: +y.toFixed(2)
+              });
+            }
+          }
+          state.activeParams = {
+            detection_type: 'Time Interval Cadence',
+            source: 'cadence',
+            density: `${stepSec}s interval`,
+            interval_sec: stepSec,
+            baseline_pitch: curAngles.pitch,
+            baseline_roll: curAngles.roll,
+            range_mode: (range.mode === 'full') ? 'Full Video' : `Frames ${range.startF} - ${range.endF}`,
+            timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+          };
+        }
+
+        if (newCps.length === 0) {
+          alert('No keyframes were generated.');
+          return;
+        }
+
+        if (replaceExisting) {
+          state.checkpoints = newCps;
+        } else {
+          const cpMap = new Map();
+          state.checkpoints.forEach(cp => cpMap.set(cp.frame, cp));
+          newCps.forEach(cp => cpMap.set(cp.frame, cp));
+          state.checkpoints = Array.from(cpMap.values()).sort((a, b) => a.frame - b.frame);
+        }
+
+        state.paramLogDirty = true;
+        renderCheckpoints();
+        updateTimelineUI();
+        updateCameraRotation();
+        syncHorizonLogToServer();
+
+        const strategyLabel = (activeCadenceStrategy === 'pitch') ? 'pitch extrema' : (activeCadenceStrategy === 'sensor' ? 'sensor/vision' : 'cadence');
+        hudStatus.textContent = `Seeded ${newCps.length} ${strategyLabel} keyframes`;
+        closeGenerateModal();
+      });
+    }
+
+    // Non-VR Warning Modal handlers
+    const modalNonVrWarning = document.getElementById('modalNonVrWarning');
+    const btnCloseNonVrWarning = document.getElementById('btnCloseNonVrWarning');
+    const btnDismissNonVrWarning = document.getElementById('btnDismissNonVrWarning');
+    const btnOpenDifferentVideo = document.getElementById('btnOpenDifferentVideo');
+
+    if (btnCloseNonVrWarning) btnCloseNonVrWarning.addEventListener('click', () => { modalNonVrWarning.style.display = 'none'; });
+    if (btnDismissNonVrWarning) btnDismissNonVrWarning.addEventListener('click', () => { modalNonVrWarning.style.display = 'none'; });
+    if (btnOpenDifferentVideo) {
+      btnOpenDifferentVideo.addEventListener('click', () => {
+        modalNonVrWarning.style.display = 'none';
+        document.getElementById('videoFileInput').click();
+      });
+    }
+
+    // Save Checkpoints Success Modal handlers
+    const modalSaveSuccess = document.getElementById('modalSaveSuccess');
+    const btnCloseSaveSuccessModal = document.getElementById('btnCloseSaveSuccessModal');
+    const btnDismissSaveSuccess = document.getElementById('btnDismissSaveSuccess');
+    const btnReturnDashboard = document.getElementById('btnReturnDashboard');
+    const btnCopySavePath = document.getElementById('btnCopySavePath');
+
+    function showSaveSuccessModal(count, filePath, allZero = false) {
+      const countEl = document.getElementById('saveModalCount');
+      const pathEl = document.getElementById('saveModalPath');
+      const noticeBox = document.getElementById('saveSuccessNoticeBox');
+      const noticeIcon = document.getElementById('saveSuccessNoticeIcon');
+      const noticeText = document.getElementById('saveSuccessNoticeText');
+      if (countEl) countEl.textContent = count;
+      if (pathEl) pathEl.textContent = filePath;
+
+      if (noticeBox && noticeText) {
+        if (allZero) {
+          noticeBox.style.background = 'rgba(245, 158, 11, 0.12)';
+          noticeBox.style.border = '1px solid rgba(245, 158, 11, 0.35)';
+          if (noticeIcon) {
+            noticeIcon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>`;
+          }
+          noticeText.innerHTML = `⚠️ <strong>Notice:</strong> All ${count} keyframes currently have <strong>0.0°</strong> pitch and roll (neutral level). The pipeline will treat this as already level and stream-copy without re-encoding. If you intended to level the video, adjust keyframe angles before saving or return to Dashboard.`;
+        } else {
+          noticeBox.style.background = 'rgba(16, 185, 129, 0.1)';
+          noticeBox.style.border = '1px solid rgba(16, 185, 129, 0.25)';
+          if (noticeIcon) {
+            noticeIcon.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`;
+          }
+          noticeText.innerHTML = `⚡ <strong>Active tilt corrections saved!</strong> The pipeline is automatically resuming in the background to re-encode and level your video. Return to the <strong>Dashboard</strong> to monitor progress.`;
+        }
+      }
+
+      if (modalSaveSuccess) modalSaveSuccess.style.display = 'flex';
+    }
+
+    function closeSaveSuccessModal() {
+      if (modalSaveSuccess) modalSaveSuccess.style.display = 'none';
+    }
+
+    if (btnCloseSaveSuccessModal) btnCloseSaveSuccessModal.addEventListener('click', closeSaveSuccessModal);
+    if (btnDismissSaveSuccess) btnDismissSaveSuccess.addEventListener('click', closeSaveSuccessModal);
+    if (modalSaveSuccess) {
+      modalSaveSuccess.addEventListener('click', (e) => {
+        if (e.target === modalSaveSuccess) closeSaveSuccessModal();
+      });
+    }
+
+    if (btnReturnDashboard) {
+      btnReturnDashboard.addEventListener('click', () => {
+        closeSaveSuccessModal();
+        if (window.opener && !window.opener.closed) {
+          try {
+            window.opener.focus();
+          } catch (e) {}
+        }
+        try {
+          window.close();
+        } catch (e) {}
+      });
+    }
+
+    if (btnCopySavePath) {
+      btnCopySavePath.addEventListener('click', async () => {
+        const pathEl = document.getElementById('saveModalPath');
+        if (!pathEl) return;
+        try {
+          await navigator.clipboard.writeText(pathEl.textContent);
+          const origHtml = btnCopySavePath.innerHTML;
+          btnCopySavePath.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            Copied!
+          `;
+          btnCopySavePath.style.borderColor = 'var(--success)';
+          btnCopySavePath.style.color = 'var(--success)';
+          setTimeout(() => {
+            btnCopySavePath.innerHTML = origHtml;
+            btnCopySavePath.style.borderColor = '';
+            btnCopySavePath.style.color = '';
+          }, 2000);
+        } catch (err) {
+          console.warn('Failed to copy to clipboard:', err);
+        }
+      });
+    }
+
+    function openParamLogModal() {
+      if (!modalHorizonParamsLog) return;
+      const logName = state.outBase ? `${state.outBase}_horizon_params.log` : 'horizon_params.log';
+      const logUrl = `data/runtime/work/${logName}`;
+      if (paramLogFilePath) paramLogFilePath.textContent = logUrl;
+
+      if (paramLogContent) {
+        const clientLog = buildClientHorizonParamsLog();
+        const p = state.activeParams || {};
+        const src = (p.source || '').toLowerCase();
+        const isClientManaged = !state.activeParams ||
+          src === 'manual' ||
+          src === 'none' ||
+          src === 'imported' ||
+          state.paramLogDirty ||
+          state.checkpoints.length === 0;
+
+        if (isClientManaged) {
+          paramLogContent.textContent = clientLog;
+        } else {
+          paramLogContent.textContent = 'Loading parameter audit log...';
+          fetch(logUrl + '?t=' + Date.now())
+            .then(res => {
+              if (res.ok) return res.text();
+              throw new Error(`Log file not found (${res.status})`);
+            })
+            .then(text => {
+              if (text && text.trim().length > 0 && !state.paramLogDirty) {
+                paramLogContent.textContent = text;
+              } else {
+                paramLogContent.textContent = clientLog;
+              }
+            })
+            .catch(() => {
+              paramLogContent.textContent = clientLog;
+            });
+        }
+      }
+      modalHorizonParamsLog.style.display = 'flex';
+    }
+
+    function closeParamLogModal() {
+      if (modalHorizonParamsLog) modalHorizonParamsLog.style.display = 'none';
+    }
+
+    if (btnViewParamLog) btnViewParamLog.addEventListener('click', openParamLogModal);
+    if (btnCloseParamLog) btnCloseParamLog.addEventListener('click', closeParamLogModal);
+    if (btnCloseParamLogFooter) btnCloseParamLogFooter.addEventListener('click', closeParamLogModal);
+    if (modalHorizonParamsLog) {
+      modalHorizonParamsLog.addEventListener('click', (e) => {
+        if (e.target === modalHorizonParamsLog) closeParamLogModal();
+      });
+    }
+    if (btnCopyParamLog) {
+      btnCopyParamLog.addEventListener('click', async () => {
+        if (!paramLogContent) return;
+        try {
+          await navigator.clipboard.writeText(paramLogContent.textContent);
+          const orig = btnCopyParamLog.textContent;
+          btnCopyParamLog.textContent = '✓ Copied!';
+          setTimeout(() => { btnCopyParamLog.textContent = orig; }, 2000);
+        } catch (e) {
+          alert('Failed to copy: ' + e.message);
+        }
+      });
+    }
+
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+      } else if (e.code === 'ArrowLeft') {
+        e.preventDefault();
+        seekToFrame(state.currentFrame - (e.shiftKey ? 5 : 1));
+      } else if (e.code === 'ArrowRight') {
+        e.preventDefault();
+        seekToFrame(state.currentFrame + (e.shiftKey ? 5 : 1));
+      } else if (e.code === 'KeyK') {
+        btnAddCheckpoint.click();
+      } else if (e.code === 'BracketLeft') {
+        e.preventDefault();
+        changePlaybackSpeedStep(-1);
+      } else if (e.code === 'BracketRight') {
+        e.preventDefault();
+        changePlaybackSpeedStep(1);
+      } else if (e.code === 'Home') {
+        e.preventDefault();
+        seekToFrame(0);
+      } else if (e.code === 'End') {
+        e.preventDefault();
+        seekToFrame(state.totalFrames > 0 ? state.totalFrames - 1 : 0);
+      } else if (e.code === 'Escape') {
+        if (modalHorizonParamsLog && modalHorizonParamsLog.style.display === 'flex') {
+          closeParamLogModal();
+        } else if (modalSaveSuccess && modalSaveSuccess.style.display === 'flex') {
+          closeSaveSuccessModal();
+        } else if (modalNonVrWarning && modalNonVrWarning.style.display === 'flex') {
+          modalNonVrWarning.style.display = 'none';
+        } else if (modalGenerateCheckpoints && modalGenerateCheckpoints.style.display === 'flex') {
+          closeGenerateModal();
+        } else if (state.isDrawing) {
+          state.isDrawing = false;
+          state.drawPoints = [];
+          clearDrawCanvas();
+          btnTwoPointTool.classList.remove('active');
+          webglCanvas.classList.remove('draw-mode');
+          hudStatus.textContent = 'Ready';
+        }
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initThree();
+      onWindowResize();
+      updateCameraRotation();
+      renderCheckpoints();
+      updateTimelineUI();
+
+      // Parse URL query parameters
+      const urlParams = new URLSearchParams(window.location.search);
+      const videoParam = urlParams.get('video');
+      const outBaseParam = urlParams.get('out_base') || urlParams.get('name') || '';
+      const pitchParam = urlParams.get('pitch');
+      const rollParam = urlParams.get('roll');
+
+      if (pitchParam && numAutoDetectBaselinePitch) {
+        numAutoDetectBaselinePitch.value = pitchParam;
+      }
+      if (rollParam && numAutoDetectBaselineRoll) {
+        numAutoDetectBaselineRoll.value = rollParam;
+      }
+
+      if (outBaseParam) {
+        state.outBase = outBaseParam;
+        document.title = `Horizon Tool - ${outBaseParam}`;
+      }
+
+      if (videoParam) {
+        state.videoName = videoParam;
+        loadVideo(videoParam);
+      }
+
+      // Auto-load checkpoints if provided via ?checkpoints= or if out_base has saved checkpoints
+      const checkpointsParam = urlParams.get('checkpoints');
+      const targetCpUrl = checkpointsParam || (outBaseParam ? `data/runtime/work/${outBaseParam}_horizon_checkpoints.json` : '');
+      if (targetCpUrl) {
+        fetch(targetCpUrl)
+          .then(res => {
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+          })
+          .then(data => {
+            if (data && data.checkpoints && Array.isArray(data.checkpoints)) {
+              state.checkpoints = data.checkpoints;
+              if (data.fps) state.fps = data.fps;
+              if (data.totalFrames && (!state.totalFrames || state.totalFrames <= 1)) {
+                state.totalFrames = data.totalFrames;
+                inputFrame.max = state.totalFrames - 1;
+              }
+              if (data.ignoreYaw !== undefined) {
+                state.ignoreYaw = data.ignoreYaw;
+                updateIgnoreYawUI();
+              }
+              if (data.parameters) {
+                state.activeParams = data.parameters;
+              } else {
+                state.activeParams = {
+                  detection_type: data.sourceType || 'Loaded Checkpoints',
+                  source: data.sourceType || 'loaded',
+                  timestamp: (new Date()).toISOString().replace('T', ' ').substring(0, 19)
+                };
+              }
+              renderCheckpoints();
+              updateTimelineUI();
+              updateCameraRotation();
+              hudStatus.innerHTML = `<span style="color:var(--success); font-weight:bold;">Loaded ${data.checkpoints.length} checkpoints from ${targetCpUrl}</span>`;
+            }
+          })
+          .catch(err => {});
+      }
+    });
+  </script>
+</body>
+</html>

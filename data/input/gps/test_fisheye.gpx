@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="360 Gear StreetView Builder" xmlns="http://www.topografix.com/GPX/1/1">
+  <trk>
+    <name>Google Street View Track</name>
+    <trkseg>
+      <trkpt lat="40.78120000" lon="-73.96650000">
+        <ele>40.000</ele>
+        <time>2026-09-01T23:08:43Z</time>
+      </trkpt>
+      <trkpt lat="40.78180000" lon="-73.96720000">
+        <ele>41.000</ele>
+        <time>2026-09-01T23:08:44Z</time>
+      </trkpt>
+      <trkpt lat="40.78250000" lon="-73.96800000">
+        <ele>42.000</ele>
+        <time>2026-09-01T23:08:45Z</time>
+      </trkpt>
+      <trkpt lat="40.78310000" lon="-73.96880000">
+        <ele>41.000</ele>
+        <time>2026-09-01T23:08:46Z</time>
+      </trkpt>
+    </trkseg>
+  </trk>
+</gpx>

@@ -1,0 +1,21 @@
+{
+    "ih_fov": 190.6,
+    "iv_fov": 190.6,
+    "ih_fov_precise": 190.6,
+    "iv_fov_precise": 190.6,
+    "left_y_offset": 3,
+    "rear_roll_offset": 1.02,
+    "front_center": [
+        958.9858548677885,
+        958.8544316218449
+    ],
+    "rear_center": [
+        963.3483966533954,
+        961.7447453425481
+    ],
+    "front_radius": 977.1333505483774,
+    "rear_radius": 1011.8116088867188,
+    "dataset_videos": 13,
+    "dataset_frames": 130,
+    "mean_disparity_px": 14.74
+}

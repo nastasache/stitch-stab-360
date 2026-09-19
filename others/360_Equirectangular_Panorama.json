@@ -1,0 +1,57 @@
+{
+  "name": "360_Equirectangular_Panorama",
+  "note": "360 Equirectangular Panorama",
+  "calibrated_by": "Gyroflow",
+  "camera_brand": "Samsung",
+  "camera_model": "Gear 360",
+  "lens_model": "Equirectangular 360",
+  "camera_setting": "3840x1920",
+  "calib_dimension": {
+    "w": 3840,
+    "h": 1920
+  },
+  "orig_dimension": {
+    "w": 3840,
+    "h": 1920
+  },
+  "output_dimension": {
+    "w": 3840,
+    "h": 1920
+  },
+  "frame_readout_time": 0.0,
+  "gyro_lpf": null,
+  "input_horizontal_stretch": 1.0,
+  "input_vertical_stretch": 1.0,
+  "num_images": 1,
+  "fps": 29.97,
+  "official": false,
+  "use_opencv_fisheye": false,
+  "use_opencv_standard": true,
+  "calib_params": {
+    "RMS_error": 0.0,
+    "camera_matrix": [
+      [
+        1222.3,
+        0.0,
+        1920.0
+      ],
+      [
+        0.0,
+        1222.3,
+        960.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "distortion_coeffs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  }
+}

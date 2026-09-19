@@ -1,0 +1,84 @@
+{
+  "name": "Gear360_Equirectangular_3840x1920",
+  "note": "Equirectangular 360° panorama lens profile for stitched 360 videos",
+  "calibrated_by": "Antigravity",
+  "camera_brand": "Samsung",
+  "camera_model": "Gear 360 (Stitched)",
+  "lens_model": "Equirectangular 360°",
+  "camera_setting": "3840x1920 360° Panorama",
+  "calib_dimension": {
+    "w": 3840,
+    "h": 1920
+  },
+  "orig_dimension": {
+    "w": 3840,
+    "h": 1920
+  },
+  "output_dimension": {
+    "w": 3840,
+    "h": 1920
+  },
+  "frame_readout_time": null,
+  "gyro_lpf": null,
+  "input_horizontal_stretch": 1.0,
+  "input_vertical_stretch": 1.0,
+  "num_images": 1,
+  "fps": 30.0,
+  "official": false,
+  "use_opencv_fisheye": true,
+  "fisheye_params": {
+    "RMS_error": 0.0,
+    "camera_matrix": [
+      [
+        611.15494,
+        0.0,
+        1920.0
+      ],
+      [
+        0.0,
+        611.15494,
+        960.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "distortion_coeffs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "radial_distortion_limit": null
+  },
+  "use_opencv_standard": false,
+  "calib_params": {
+    "RMS_error": 0.0,
+    "camera_matrix": [
+      [
+        611.15494,
+        0.0,
+        1920.0
+      ],
+      [
+        0.0,
+        611.15494,
+        960.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "distortion_coeffs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ]
+  }
+}

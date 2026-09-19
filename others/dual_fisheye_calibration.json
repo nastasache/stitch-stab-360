@@ -1,0 +1,152 @@
+{
+  "metadata": {
+    "name": "Gear360_DualFisheye_Calibrated",
+    "created_at": "2026-08-02T14:13:16.227294",
+    "lens_model": "fisheye_kannala_brandt",
+    "calib_dimension": {
+      "w": 3840,
+      "h": 1920
+    },
+    "official": false,
+    "calibrated_by": "Antigravity IDE Calibration Tool"
+  },
+  "front_lens": {
+    "camera_matrix": [
+      [
+        960.0,
+        0.0,
+        960.0
+      ],
+      [
+        0.0,
+        960.0,
+        960.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "distortion_coeffs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "optical_center": {
+      "cx": 960.0,
+      "cy": 960.0
+    },
+    "effective_focal_length": {
+      "fx": 960.0,
+      "fy": 960.0
+    },
+    "fov_degrees": 195.0,
+    "rms_error": 0.0
+  },
+  "rear_lens": {
+    "camera_matrix": [
+      [
+        960.0,
+        0.0,
+        960.0
+      ],
+      [
+        0.0,
+        960.0,
+        960.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "distortion_coeffs": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "optical_center": {
+      "cx": 960.0,
+      "cy": 960.0
+    },
+    "effective_focal_length": {
+      "fx": 960.0,
+      "fy": 960.0
+    },
+    "fov_degrees": 195.0,
+    "rms_error": 0.0
+  },
+  "stereo_transform": {
+    "rotation_matrix_R": [
+      [
+        1.0,
+        0.0,
+        0.0
+      ],
+      [
+        0.0,
+        1.0,
+        0.0
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "rotation_vector_rvec": [
+      0.0,
+      0.0,
+      0.0
+    ],
+    "translation_vector_T": [
+      0.0,
+      0.0,
+      0.02
+    ],
+    "stereo_rms_error": 0.0
+  },
+  "projection_map": {
+    "panorama_width": 3840,
+    "panorama_height": 1920,
+    "front_fov_deg": 195.0,
+    "rear_fov_deg": 195.0,
+    "interpolation_method": "INTER_LINEAR",
+    "map_type": "equirectangular"
+  },
+  "seam_and_blend": {
+    "seam_mask_path": "data/input/masks/seam_mask.png",
+    "seam_finder": "GraphCutSeamFinder",
+    "blender_type": "MultiBandBlender",
+    "num_bands": 5,
+    "blend_width_pixels": 64,
+    "overlap_angle_deg": 15.0
+  },
+  "color_compensation": {
+    "exposure_compensator": "ExposureCompensator_GAIN_BLOCKS",
+    "front_exposure_gain": 1.0,
+    "rear_exposure_gain": 1.0,
+    "front_exposure_offset": 0.0,
+    "rear_exposure_offset": 0.0,
+    "white_balance_correction": {
+      "r_gain": 1.0,
+      "g_gain": 1.0,
+      "b_gain": 1.0
+    }
+  },
+  "optical_flow": {
+    "enabled": true,
+    "algorithm": "DISOpticalFlow",
+    "flow_preset": "PRESET_FAST",
+    "pyr_scale": 0.5,
+    "levels": 3,
+    "winsize": 15,
+    "iterations": 3,
+    "poly_n": 5,
+    "poly_sigma": 1.2
+  }
+}

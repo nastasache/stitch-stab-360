@@ -1,0 +1,13 @@
+{
+  "camera_brand": "Samsung Custom",
+  "camera_model": "Gear 360 Stitched",
+  "lens_model": "Equirectangular v360",
+  "lens_type": "equirectangular",
+  "fov": 360.0,
+  "fisheye_distance": 0.0,
+  "focal_length": 1.0,
+  "focal_length_x": 1.0,
+  "center_offset_x": 0.0,
+  "center_offset_y": 0.0,
+  "distortion_coeffs": [0.0, 0.0, 0.0, 0.0]
+}

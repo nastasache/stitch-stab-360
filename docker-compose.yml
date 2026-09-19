@@ -1,0 +1,20 @@
+services:
+  stitchstab360:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: stitchstab360
+    ports:
+      - "8080:80"
+    volumes:
+      - ./data/input/videos:/app/data/input/videos
+      - ./data/input/nadir:/app/data/input/nadir:ro
+      - ./data/input/gps:/app/data/input/gps:ro
+      - ./data/input/presets:/app/data/input/presets
+      - ./data/output:/app/data/output
+      - ./data/runtime:/app/data/runtime
+      - ./config:/app/config
+
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+    restart: unless-stopped
