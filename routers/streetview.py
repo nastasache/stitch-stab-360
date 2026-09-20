@@ -45,6 +45,8 @@ async def api_export_streetview(request: Request):
         return form_data.get(name, default)
 
     raw_input = gp("input", "")
+    if str(raw_input).strip().startswith("-"):
+        return JSONResponse({"status": "error", "error": f"Invalid input video path: {raw_input}"}, status_code=400)
     input_name = resolve_input_file(raw_input)
     if not input_name:
         return JSONResponse({"status": "error", "error": f"Input video file does not exist: {raw_input}"}, status_code=404)
@@ -242,6 +244,8 @@ async def api_preview_streetview_map(request: Request):
         import streetview_gpx
 
         raw_input = gp("input", "")
+        if str(raw_input).strip().startswith("-"):
+            return JSONResponse({"status": "error", "error": f"Invalid input file: {raw_input}"}, status_code=400)
         input_name = resolve_input_file(raw_input) if raw_input else ""
 
         sv_mode         = str(gp("streetview_mode", "A"))
@@ -255,9 +259,9 @@ async def api_preview_streetview_map(request: Request):
         sv_auto_pad     = str(gp("streetview_auto_pad", "1")) in ["1", "true", "True"]
 
         video_dur = 0.0
-        if input_name and os.path.exists(input_name):
+        if input_name and not input_name.startswith("-") and os.path.exists(input_name):
             try:
-                probe_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", input_name]
+                probe_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", "--", os.path.abspath(input_name)]
                 stdout, stderr = await asyncio.wait_for(run_async_subprocess(*probe_cmd), timeout=5.0)
                 stdout_str = stdout.decode("utf-8", errors="ignore").strip()
                 if stdout_str:
@@ -268,7 +272,7 @@ async def api_preview_streetview_map(request: Request):
         start_utc_dt = None
         if sv_start_time and sv_start_time != "auto":
             start_utc_dt = streetview_gpx.parse_iso_or_utc(sv_start_time)
-        if not start_utc_dt and input_name and os.path.exists(input_name):
+        if not start_utc_dt and input_name and not input_name.startswith("-") and os.path.exists(input_name):
             start_utc_dt = streetview_gpx.extract_video_creation_time_utc(input_name)
         if not start_utc_dt:
             start_utc_dt = datetime.now(timezone.utc)

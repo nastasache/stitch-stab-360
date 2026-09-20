@@ -22,6 +22,16 @@ import xml.etree.ElementTree as ET
 
 WIN_NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+try:
+    from utils.tool_resolver import resolve_ffprobe, resolve_ffmpeg
+except Exception:
+    resolve_ffprobe = None
+    resolve_ffmpeg = None
+
 def parse_iso_or_utc(ts_str):
     """Parse ISO-8601 or UTC datetime string into timezone-aware datetime.
 
@@ -69,10 +79,28 @@ def get_video_info(video_path):
     Returns:
         Tuple of (duration_sec, width, height, fps, creation_time_dt).
     """
+    if not video_path:
+        return 0.0, 3840, 1920, 30.0, None
+
+    clean_path = str(video_path).strip()
+    if clean_path.startswith("-"):
+        raise ValueError(f"Invalid video path: {clean_path!r} cannot start with a dash")
+
+    abs_video_path = os.path.abspath(clean_path)
+
+    ffprobe_bin = "ffprobe"
+    if callable(resolve_ffprobe):
+        try:
+            info = resolve_ffprobe()
+            if info and info.get("path"):
+                ffprobe_bin = info["path"]
+        except Exception:
+            ffprobe_bin = "ffprobe"
+
     cmd = [
-        "ffprobe", "-v", "error", "-select_streams", "v:0",
+        ffprobe_bin, "-v", "error", "-select_streams", "v:0",
         "-show_entries", "format=duration:format_tags=creation_time:stream=width,height,r_frame_rate,duration:stream_tags=creation_time",
-        "-of", "json", video_path
+        "-of", "json", "--", abs_video_path
     ]
     creation_dt = None
     try:
@@ -97,13 +125,13 @@ def get_video_info(video_path):
         if c_tag:
             creation_dt = parse_iso_or_utc(c_tag)
 
-        if creation_dt is None and os.path.exists(video_path):
-            mtime = os.path.getmtime(video_path)
+        if creation_dt is None and os.path.exists(abs_video_path):
+            mtime = os.path.getmtime(abs_video_path)
             creation_dt = datetime.datetime.fromtimestamp(mtime, tz=datetime.timezone.utc)
             
         return duration, width, height, fps, creation_dt
     except Exception as e:
-        print(f"Error reading video info from {video_path}: {e}", file=sys.stderr)
+        print(f"Error reading video info from {abs_video_path}: {e}", file=sys.stderr)
         return 0.0, 3840, 1920, 30.0, None
 
 def extract_video_creation_time_utc(video_path):
@@ -978,6 +1006,8 @@ def process_streetview(
             input_videos_list.extend([v.strip() for v in additional_videos.split(",") if v.strip()])
 
     for v in input_videos_list:
+        if str(v).strip().startswith("-"):
+            raise ValueError(f"Invalid video file path: {v!r} cannot start with a dash")
         if not os.path.exists(v):
             raise FileNotFoundError(f"Input video file not found: {v}")
 
@@ -994,8 +1024,17 @@ def process_streetview(
             for v_path in input_videos_list:
                 f.write(f"file '{os.path.abspath(v_path).replace(chr(92), '/')}'\n")
 
+        ffmpeg_concat_bin = "ffmpeg"
+        if callable(resolve_ffmpeg):
+            try:
+                info = resolve_ffmpeg()
+                if info and info.get("path"):
+                    ffmpeg_concat_bin = info["path"]
+            except Exception:
+                ffmpeg_concat_bin = "ffmpeg"
+
         print(f"[StreetView] Merging {len(input_videos_list)} video segments via stream copy...")
-        concat_cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", concat_txt, "-c", "copy", temp_concat_video]
+        concat_cmd = [ffmpeg_concat_bin, "-y", "-f", "concat", "-safe", "0", "-i", concat_txt, "-c", "copy", temp_concat_video]
         subprocess.run(concat_cmd, capture_output=True, text=True, check=True, creationflags=WIN_NO_WINDOW)
         effective_input_video = temp_concat_video
 
@@ -1121,7 +1160,16 @@ def process_streetview(
     # 2. Render Padded & Metadata-tagged Output Video
     os.makedirs(os.path.dirname(os.path.abspath(output_video)), exist_ok=True)
 
-    ffmpeg_cmd = ["ffmpeg", "-y", "-i", effective_input_video]
+    ffmpeg_render_bin = "ffmpeg"
+    if callable(resolve_ffmpeg):
+        try:
+            info = resolve_ffmpeg()
+            if info and info.get("path"):
+                ffmpeg_render_bin = info["path"]
+        except Exception:
+            ffmpeg_render_bin = "ffmpeg"
+
+    ffmpeg_cmd = [ffmpeg_render_bin, "-y", "-i", effective_input_video]
     filter_complex = []
 
     if need_pad:

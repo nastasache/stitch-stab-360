@@ -75,3 +75,7 @@ Centralized NVENC hardware probe in utils.tool_resolver testing h264_nvenc opera
 
 ## [2026-09-20] NVDEC -hwaccel cuda Chroma Corruption
 Injecting -hwaccel cuda with -hwaccel_output_format yuv420p produces green/cyan chroma corruption due to NV12-to-YUV420P stride/UV plane misalignment when fed into complex CPU filtergraphs (v360, split, alphamerge).
+
+
+## [2026-09-20] CodeQL Command-Line Injection Hardening (Alert #144)
+Hardened subprocess invocations in streetview_gpx.py and routers/streetview.py by validating input paths against leading hyphens (CWE-088 option injection), resolving binaries via utils.tool_resolver, using the '--' positional operand delimiter, and validating file existence.
