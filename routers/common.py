@@ -323,8 +323,12 @@ def sanitize_cmd_arg(arg: Any) -> str:
     if arg is None:
         return ""
     s = str(arg)
-    if any(c in s for c in ("\0", "\n", "\r", ";", "&", "|", "`", "$", ">", "<")):
+    if any(c in s for c in ("\0", "\n", "\r", "&", "|", "`", "$", ">", "<")):
         raise ValueError(f"Prohibited control sequence in command argument: {s!r}")
+    if ";" in s:
+        is_filtergraph = bool(re.match(r'^\s*(\[\d+:[av\d]+\]|\[[a-zA-Z0-9_\-]+\])', s))
+        if not is_filtergraph or re.search(r';\s+[a-zA-Z]', s):
+            raise ValueError(f"Prohibited control sequence in command argument: {s!r}")
     return s
 
 
