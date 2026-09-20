@@ -660,7 +660,7 @@ def safe_runtime_write_path(filename: str, subdir: str = "data/runtime/work") ->
 
     if not target_path.startswith(sub_dir_abs + os.sep):
         return ""
-    return f"{subdir}/{clean}"
+    return os.path.relpath(target_path, base_dir_abs).replace("\\", "/")
 
 def resolve_output_file(raw_output: str) -> str:
     """Resolve an output video path, routing to data/output/ or data/runtime/work/.
@@ -705,7 +705,7 @@ def resolve_output_file(raw_output: str) -> str:
 
     if not target_path.startswith(sub_dir_abs + os.sep):
         return ""
-    return f"{sub}/{clean_name}"
+    return os.path.relpath(target_path, base_dir_abs).replace("\\", "/")
 
 def safe_job_id(job_id_raw: Any) -> str:
     """Sanitize and validate a job identifier to prevent path injection.

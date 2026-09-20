@@ -1269,8 +1269,8 @@ async def api_detect_checkpoints(request: Request):
     out_base         = re.sub(r'[^a-zA-Z0-9_\-]', '', str(gp("out_base", "")))
     video_file_raw   = str(gp("video", ""))
     video_file       = resolve_input_file(video_file_raw)
-    clean_video      = os.path.basename(video_file) if video_file else os.path.basename(video_file_raw)
-    clean_video_no_ext = Path(clean_video).stem
+    clean_video      = os.path.basename(video_file) if video_file else ""
+    clean_video_no_ext = Path(clean_video).stem if clean_video else ""
     source_type      = str(gp("source", "auto"))
     density          = str(gp("density", "balanced"))
     fps              = float(gp("fps", "29.97"))
