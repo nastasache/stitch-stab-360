@@ -15,3 +15,7 @@ Configured --telemetry_smoothing as float in scripts/pipeline.py and routers/job
 
 ## [2026-09-20] CLI & API Type Hardening
 Configured --duration as float in pipeline.py and routers/jobs.py to prevent truncation of fractional durations. Added _parse_int to pipeline.py argument parser for discrete parameters (blend_width, frame indices, resolutions) to safely accept integer-equivalent float representations without raising ValueError. Enforced int(float(...)) across API form parsing in routers/videos.py, routers/jobs.py, and routers/streetview.py.
+
+
+## [2026-09-21] Preserve Query Parameters in Client-Side Media Sanitizers
+Updated resolveVideoSrc in app.js and sanitizeMediaUrl in horizon_editor.html to cleanly extract and validate safe query strings (?t=timestamp cachebusters) before splitting path segments. Previously, non-alphanumeric replacement converted ?t= into _t_, causing 404 Not Found on intermediate video playback.

@@ -1859,14 +1859,27 @@
         return '';
       }
       let cleanPath = s.replace(/\\/g, '/');
+      let cleanQuery = '';
       if (cleanPath.includes('://')) {
         try {
           const u = new URL(cleanPath, window.location.origin);
           if (u.origin !== window.location.origin) return '';
           if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
           cleanPath = u.pathname;
+          if (u.search && /^\?[a-zA-Z0-9_=&.\-]+$/.test(u.search)) {
+            cleanQuery = u.search;
+          }
         } catch (e) {
           return '';
+        }
+      } else {
+        const qIndex = cleanPath.indexOf('?');
+        if (qIndex !== -1) {
+          const rawQuery = cleanPath.slice(qIndex);
+          cleanPath = cleanPath.slice(0, qIndex);
+          if (/^\?[a-zA-Z0-9_=&.\-]+$/.test(rawQuery)) {
+            cleanQuery = rawQuery;
+          }
         }
       }
       cleanPath = cleanPath.replace(/^\/+/, '');
@@ -1889,7 +1902,7 @@
       } else {
         finalPath = '/data/input/videos/' + safeRelPath;
       }
-      return encodeURI(finalPath);
+      return encodeURI(finalPath) + cleanQuery;
     }
 
     function loadVideo(src, fileObj = null) {

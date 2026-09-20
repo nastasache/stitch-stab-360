@@ -5460,14 +5460,27 @@ function resolveVideoSrc(path) {
     if (!path || typeof path !== 'string') return '';
     let p = path.trim().replace(/\\/g, '/');
     if (/^(javascript|data|vbscript|blob):/i.test(p)) return '';
+    let cleanQuery = '';
     if (p.includes('://')) {
         try {
             const u = new URL(p, window.location.origin);
             if (u.origin !== window.location.origin) return '';
             if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
             p = u.pathname;
+            if (u.search && /^\?[a-zA-Z0-9_=&.\-]+$/.test(u.search)) {
+                cleanQuery = u.search;
+            }
         } catch (e) {
             return '';
+        }
+    } else {
+        const qIndex = p.indexOf('?');
+        if (qIndex !== -1) {
+            const rawQuery = p.slice(qIndex);
+            p = p.slice(0, qIndex);
+            if (/^\?[a-zA-Z0-9_=&.\-]+$/.test(rawQuery)) {
+                cleanQuery = rawQuery;
+            }
         }
     }
     p = p.replace(/^\/+/, '');
@@ -5477,7 +5490,7 @@ function resolveVideoSrc(path) {
     const finalPath = (safeRelPath.startsWith('data/') || safeRelPath.startsWith('samples/'))
         ? safeRelPath
         : `data/input/videos/${safeRelPath}`;
-    return encodeURI(finalPath);
+    return encodeURI(finalPath) + cleanQuery;
 }
 
 async function loadVideoMetadata() {
