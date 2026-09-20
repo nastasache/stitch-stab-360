@@ -786,43 +786,45 @@ async def api_start_job(request: Request):
 
     if str(gp("stabilize", "0")) == "1" and not is_photo:
         pipeline_cmd.append("--stabilize")
-        pipeline_cmd.extend(["--stabilize_methods", str(gp("stabilize_methods", "telemetry,kopf,kabsch,vidstab,cinematic,horizon,traveldir"))])
-        pipeline_cmd.extend(["--stab_quality_mode", str(gp("stab_quality_mode", PIPELINE_DEFAULTS["stab_quality_mode"]))])
-        pipeline_cmd.extend(["--telemetry_mode", str(gp("telemetry_mode", PIPELINE_DEFAULTS["telemetry_mode"]))])
-        pipeline_cmd.extend(["--telemetry_fusion", str(gp("telemetry_fusion", PIPELINE_DEFAULTS["telemetry_fusion"]))])
-        pipeline_cmd.extend(["--telemetry_fusion_gain", str(gp("telemetry_fusion_gain", PIPELINE_DEFAULTS["telemetry_fusion_gain"]))])
-        pipeline_cmd.extend(["--telemetry_source", str(gp("telemetry_source", PIPELINE_DEFAULTS["telemetry_source"]))])
-        pipeline_cmd.extend(["--telemetry_smoothing", str(gp("telemetry_smoothing", PIPELINE_DEFAULTS["telemetry_smoothing"]))])
-        pipeline_cmd.extend(["--telemetry_ref_frame", str(gp("telemetry_ref_frame", PIPELINE_DEFAULTS["telemetry_ref_frame"]))])
-        pipeline_cmd.extend(["--telemetry_multiplier_roll", str(gp("telemetry_multiplier_roll", PIPELINE_DEFAULTS["telemetry_multiplier_roll"]))])
-        pipeline_cmd.extend(["--telemetry_multiplier_pitch", str(gp("telemetry_multiplier_pitch", PIPELINE_DEFAULTS["telemetry_multiplier_pitch"]))])
-        pipeline_cmd.extend(["--telemetry_multiplier_yaw", str(gp("telemetry_multiplier_yaw", PIPELINE_DEFAULTS["telemetry_multiplier_yaw"]))])
-        pipeline_cmd.extend(["--vidstab_smoothing", str(gp("vidstab_smoothing", PIPELINE_DEFAULTS["vidstab_smoothing"]))])
-        pipeline_cmd.extend(["--vidstab_shakiness", str(gp("vidstab_shakiness", PIPELINE_DEFAULTS["vidstab_shakiness"]))])
-        pipeline_cmd.extend(["--vidstab_optalgo", str(gp("vidstab_optalgo", PIPELINE_DEFAULTS["vidstab_optalgo"]))])
-        pipeline_cmd.extend(["--kabsch_smoothing", str(gp("kabsch_smoothing", PIPELINE_DEFAULTS["kabsch_smoothing"]))])
+        valid_methods = {"telemetry", "kopf", "kabsch", "vidstab", "cinematic", "horizon", "traveldir"}
+        cleaned_methods = ",".join([m.strip() for m in str(gp("stabilize_methods", "telemetry,kopf,kabsch,vidstab,cinematic,horizon,traveldir")).split(",") if m.strip() in valid_methods])
+        pipeline_cmd.extend(["--stabilize_methods", cleaned_methods or "telemetry,kopf,kabsch,vidstab,cinematic,horizon,traveldir"])
+        pipeline_cmd.extend(["--stab_quality_mode", safe_choice(gp("stab_quality_mode"), ["draft", "standard", "high", "ultra"], PIPELINE_DEFAULTS["stab_quality_mode"])])
+        pipeline_cmd.extend(["--telemetry_mode", safe_choice(gp("telemetry_mode"), ["fusion", "orientation", "gyro"], PIPELINE_DEFAULTS["telemetry_mode"])])
+        pipeline_cmd.extend(["--telemetry_fusion", safe_choice(gp("telemetry_fusion"), ["madgwick", "mahony", "complementary", "ekf"], PIPELINE_DEFAULTS["telemetry_fusion"])])
+        pipeline_cmd.extend(["--telemetry_fusion_gain", safe_number(gp("telemetry_fusion_gain"), PIPELINE_DEFAULTS["telemetry_fusion_gain"])])
+        pipeline_cmd.extend(["--telemetry_source", safe_choice(gp("telemetry_source"), ["auto", "gcsv", "txt", "mp4"], PIPELINE_DEFAULTS["telemetry_source"])])
+        pipeline_cmd.extend(["--telemetry_smoothing", safe_number(gp("telemetry_smoothing"), PIPELINE_DEFAULTS["telemetry_smoothing"])])
+        pipeline_cmd.extend(["--telemetry_ref_frame", safe_choice(gp("telemetry_ref_frame"), ["world", "camera", "body"], PIPELINE_DEFAULTS["telemetry_ref_frame"])])
+        pipeline_cmd.extend(["--telemetry_multiplier_roll", safe_number(gp("telemetry_multiplier_roll"), PIPELINE_DEFAULTS["telemetry_multiplier_roll"])])
+        pipeline_cmd.extend(["--telemetry_multiplier_pitch", safe_number(gp("telemetry_multiplier_pitch"), PIPELINE_DEFAULTS["telemetry_multiplier_pitch"])])
+        pipeline_cmd.extend(["--telemetry_multiplier_yaw", safe_number(gp("telemetry_multiplier_yaw"), PIPELINE_DEFAULTS["telemetry_multiplier_yaw"])])
+        pipeline_cmd.extend(["--vidstab_smoothing", safe_number(gp("vidstab_smoothing"), PIPELINE_DEFAULTS["vidstab_smoothing"], cast_fn=int)])
+        pipeline_cmd.extend(["--vidstab_shakiness", safe_number(gp("vidstab_shakiness"), PIPELINE_DEFAULTS["vidstab_shakiness"], cast_fn=int)])
+        pipeline_cmd.extend(["--vidstab_optalgo", safe_choice(gp("vidstab_optalgo"), ["gauss", "avg"], PIPELINE_DEFAULTS["vidstab_optalgo"])])
+        pipeline_cmd.extend(["--kabsch_smoothing", safe_number(gp("kabsch_smoothing"), PIPELINE_DEFAULTS["kabsch_smoothing"], cast_fn=int)])
         if str(gp("vidstab_tripod", "0")) == "1": pipeline_cmd.append("--vidstab_tripod")
         if str(gp("vidstab_visual", "0")) == "1": pipeline_cmd.append("--vidstab_visual")
-        pipeline_cmd.extend(["--kopf_keyframe_sec", str(gp("kopf_keyframe_sec", PIPELINE_DEFAULTS["kopf_keyframe_sec"]))])
-        pipeline_cmd.extend(["--kopf_cube_face", str(gp("kopf_cube_face", PIPELINE_DEFAULTS["kopf_cube_face"]))])
-        pipeline_cmd.extend(["--kopf_max_features", str(gp("kopf_max_features", PIPELINE_DEFAULTS["kopf_max_features"]))])
+        pipeline_cmd.extend(["--kopf_keyframe_sec", safe_number(gp("kopf_keyframe_sec"), PIPELINE_DEFAULTS["kopf_keyframe_sec"])])
+        pipeline_cmd.extend(["--kopf_cube_face", safe_choice(gp("kopf_cube_face"), ["equi", "front", "back", "left", "right", "top", "bottom"], PIPELINE_DEFAULTS["kopf_cube_face"])])
+        pipeline_cmd.extend(["--kopf_max_features", safe_number(gp("kopf_max_features"), PIPELINE_DEFAULTS["kopf_max_features"], cast_fn=int)])
         if str(gp("kopf_deformed", "0")) == "1": pipeline_cmd.append("--kopf_deformed")
         if str(gp("kopf_reapply", "0")) == "1": pipeline_cmd.append("--kopf_reapply")
-        pipeline_cmd.extend(["--l1_lambda_acc", str(gp("l1_lambda_acc", PIPELINE_DEFAULTS["l1_lambda_acc"]))])
-        pipeline_cmd.extend(["--l1_lambda_vel", str(gp("l1_lambda_vel", PIPELINE_DEFAULTS["l1_lambda_vel"]))])
-        pipeline_cmd.extend(["--cinematic_window", str(gp("cinematic_window", PIPELINE_DEFAULTS["cinematic_window"]))])
-        pipeline_cmd.extend(["--traveldir_mode", str(gp("traveldir_mode", PIPELINE_DEFAULTS["traveldir_mode"]))])
-        pipeline_cmd.extend(["--traveldir_target_yaw", str(gp("traveldir_target_yaw", PIPELINE_DEFAULTS["traveldir_target_yaw"]))])
-        pipeline_cmd.extend(["--traveldir_damping", str(gp("traveldir_damping", PIPELINE_DEFAULTS["traveldir_damping"]))])
-        pipeline_cmd.extend(["--traveldir_deadband", str(gp("traveldir_deadband", PIPELINE_DEFAULTS["traveldir_deadband"]))])
+        pipeline_cmd.extend(["--l1_lambda_acc", safe_number(gp("l1_lambda_acc"), PIPELINE_DEFAULTS["l1_lambda_acc"])])
+        pipeline_cmd.extend(["--l1_lambda_vel", safe_number(gp("l1_lambda_vel"), PIPELINE_DEFAULTS["l1_lambda_vel"])])
+        pipeline_cmd.extend(["--cinematic_window", safe_number(gp("cinematic_window"), PIPELINE_DEFAULTS["cinematic_window"])])
+        pipeline_cmd.extend(["--traveldir_mode", safe_choice(gp("traveldir_mode"), ["auto", "forward", "backward"], PIPELINE_DEFAULTS["traveldir_mode"])])
+        pipeline_cmd.extend(["--traveldir_target_yaw", safe_number(gp("traveldir_target_yaw"), PIPELINE_DEFAULTS["traveldir_target_yaw"])])
+        pipeline_cmd.extend(["--traveldir_damping", safe_number(gp("traveldir_damping"), PIPELINE_DEFAULTS["traveldir_damping"])])
+        pipeline_cmd.extend(["--traveldir_deadband", safe_number(gp("traveldir_deadband"), PIPELINE_DEFAULTS["traveldir_deadband"])])
         if str(gp("horizon_autodetect", "0")) == "1":
             pipeline_cmd.append("--horizon_autodetect")
-            pipeline_cmd.extend(["--horizon_autodetect_source", str(gp("horizon_autodetect_source", "vision"))])
-            pipeline_cmd.extend(["--horizon_autodetect_density", str(gp("horizon_autodetect_density", "ultra_dense"))])
+            pipeline_cmd.extend(["--horizon_autodetect_source", safe_choice(gp("horizon_autodetect_source"), ["vision", "telemetry", "combined"], "vision")])
+            pipeline_cmd.extend(["--horizon_autodetect_density", safe_choice(gp("horizon_autodetect_density"), ["sparse", "balanced", "dense", "ultra_dense"], "ultra_dense")])
             if gp("horizon_pitch_prominence"):
-                pipeline_cmd.extend(["--horizon_pitch_prominence", str(gp("horizon_pitch_prominence"))])
+                pipeline_cmd.extend(["--horizon_pitch_prominence", safe_number(gp("horizon_pitch_prominence"), "1.5")])
             if gp("horizon_roll_damping"):
-                pipeline_cmd.extend(["--horizon_roll_damping", str(gp("horizon_roll_damping"))])
+                pipeline_cmd.extend(["--horizon_roll_damping", safe_number(gp("horizon_roll_damping"), "0.7")])
             if str(gp("horizon_apply_yaw", "0")) == "1": pipeline_cmd.append("--horizon_apply_yaw")
 
     if str(gp("streetview_enabled", "0")) == "1":
@@ -1330,7 +1332,8 @@ async def api_detect_checkpoints(request: Request):
                 write_horizon_params_log(out_base, data, [f"data/runtime/work/{out_base}_horizon_params.log"], video_name=clean_video)
             return JSONResponse({"status": "success", "source": "cadence", "is_post_stabilized": is_post_stabilized, "source_file": found_video or "cadence", "density": density, "epsilon": epsilon, "checkpoints_count": len(cps), "data": data})
         except Exception as e:
-            return JSONResponse({"status": "error", "error": f"Cadence generation error: {e}"}, status_code=500)
+            print(f"[ERROR] Cadence generation error: {e}", file=sys.stderr)
+            return JSONResponse({"status": "error", "error": "Cadence generation failed."}, status_code=500)
     if source_type in ["pitch_extrema", "pitch"] or (source_type == "auto" and (found_telemetry or found_motion) and not is_post_stabilized):
         try:
             from scripts.stabilize_horizon import detect_pitch_extrema_checkpoints, get_video_info
@@ -1370,7 +1373,8 @@ async def api_detect_checkpoints(request: Request):
                 write_horizon_params_log(out_base, data, [f"data/runtime/work/{out_base}_horizon_params.log"], video_name=clean_video)
             return JSONResponse({"status": "success", "source": "pitch_extrema", "is_post_stabilized": is_post_stabilized, "source_file": found_telemetry or found_motion or found_video or "pitch_extrema", "density": density, "epsilon": epsilon, "checkpoints_count": len(cps), "data": data})
         except Exception as e:
-            return JSONResponse({"status": "error", "error": f"Pitch extrema generation error: {e}"}, status_code=500)
+            print(f"[ERROR] Pitch extrema generation error: {e}", file=sys.stderr)
+            return JSONResponse({"status": "error", "error": "Pitch extrema generation failed."}, status_code=500)
 
     if (source_type == "vision" or source_type == "auto") and found_video:
         selected_source = "vision"; target_args = ["--video-file", found_video]

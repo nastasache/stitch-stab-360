@@ -272,25 +272,37 @@ async def api_preview_streetview_map(request: Request):
         valid_input_abs = None
         if input_name and not input_name.startswith("-"):
             candidate = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, input_name) if not os.path.isabs(input_name) else input_name))
-            if (candidate.startswith(base_dir_abs + os.sep) or candidate == base_dir_abs) and os.path.isfile(candidate):
+            if candidate.startswith(base_dir_abs + os.sep) and os.path.isfile(candidate):
                 valid_input_abs = candidate
 
         video_dur = 0.0
+        video_creation_dt = None
         if valid_input_abs:
             try:
-                probe_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", "--", valid_input_abs]
+                probe_cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "format=duration:format_tags=creation_time:stream_tags=creation_time", "-of", "json", "--", valid_input_abs]
                 stdout, stderr = await asyncio.wait_for(run_async_subprocess(*probe_cmd), timeout=5.0)
-                stdout_str = stdout.decode("utf-8", errors="ignore").strip()
-                if stdout_str:
-                    video_dur = float(stdout_str)
+                if stdout:
+                    info = json.loads(stdout.decode("utf-8", errors="ignore"))
+                    fmt = info.get("format", {})
+                    streams = info.get("streams", [{}])
+                    s0 = streams[0] if streams else {}
+                    dur_str = fmt.get("duration") or s0.get("duration")
+                    if dur_str:
+                        video_dur = float(dur_str)
+                    c_tag = fmt.get("tags", {}).get("creation_time") or s0.get("tags", {}).get("creation_time")
+                    if c_tag:
+                        video_creation_dt = streetview_gpx.parse_iso_or_utc(c_tag)
             except Exception as e:
-                print(f"[WARN] route preview: ffprobe duration probe failed for {valid_input_abs!r}: {e}", file=sys.stderr)
+                print(f"[WARN] route preview: ffprobe probe failed for {valid_input_abs!r}: {e}", file=sys.stderr)
 
         start_utc_dt = None
         if sv_start_time and sv_start_time != "auto":
             start_utc_dt = streetview_gpx.parse_iso_or_utc(sv_start_time)
-        if not start_utc_dt and valid_input_abs:
-            start_utc_dt = streetview_gpx.extract_video_creation_time_utc(valid_input_abs)
+        if not start_utc_dt and video_creation_dt:
+            start_utc_dt = video_creation_dt
+        if not start_utc_dt and valid_input_abs and os.path.isfile(valid_input_abs):
+            mtime = os.path.getmtime(valid_input_abs)
+            start_utc_dt = datetime.fromtimestamp(mtime, tz=timezone.utc)
         if not start_utc_dt:
             start_utc_dt = datetime.now(timezone.utc)
 

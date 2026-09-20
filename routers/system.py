@@ -120,8 +120,9 @@ async def api_system_health():
             health["disk"]["status"] = "ok"
             health["disk"]["message"] = f"{free_gb} GB free of {total_gb} GB."
     except Exception as e:
+        print(f"[WARN] Could not check disk usage: {e}", file=sys.stderr)
         health["disk"]["status"] = "warning"
-        health["disk"]["message"] = f"Could not check disk usage: {e}"
+        health["disk"]["message"] = "Could not check disk usage."
 
     # Overall aggregate status
     statuses = [

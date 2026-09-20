@@ -275,12 +275,13 @@ def check_disk_space(input_file: str = "", num_stages: int = 1, min_margin_mb: i
             clean_in = str(input_file).strip()
             base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
             target_in = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, clean_in) if not os.path.isabs(clean_in) else clean_in))
-            if target_in.startswith(base_dir_abs + os.sep) or target_in == base_dir_abs:
-                if os.path.exists(target_in):
-                    try:
-                        base_size_bytes = os.path.getsize(target_in)
-                    except Exception:
-                        base_size_bytes = 0
+            if not target_in.startswith(base_dir_abs + os.sep):
+                target_in = ""
+            if target_in and os.path.isfile(target_in):
+                try:
+                    base_size_bytes = os.path.getsize(target_in)
+                except Exception:
+                    base_size_bytes = 0
 
         # Fallback estimation if input size cannot be probed: 500MB per stage
         if base_size_bytes <= 0:
@@ -299,7 +300,8 @@ def check_disk_space(input_file: str = "", num_stages: int = 1, min_margin_mb: i
 
         return True, "", required_gb, available_gb
     except Exception as e:
-        return True, f"Disk check warning: {e}", 0.0, 0.0
+        print(f"[WARN] Disk check failed: {e}", file=sys.stderr)
+        return True, "Disk check warning: check failed.", 0.0, 0.0
 
 
 # ── Helper Functions ─────────────────────────────────────────────────────────
@@ -451,9 +453,9 @@ def is_valid_video_file(filename: str) -> bool:
     clean = str(filename).strip()
     base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
     target_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, clean) if not os.path.isabs(clean) else clean))
-    if not target_abs.startswith(base_dir_abs + os.sep) and target_abs != base_dir_abs:
+    if not target_abs.startswith(base_dir_abs + os.sep):
         return False
-    if not os.path.exists(target_abs) or not os.path.isfile(target_abs):
+    if not os.path.isfile(target_abs):
         return False
     try:
         if os.path.getsize(target_abs) == 0:
@@ -477,9 +479,9 @@ def is_valid_image_file(filename: str) -> bool:
     clean = str(filename).strip()
     base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
     target_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, clean) if not os.path.isabs(clean) else clean))
-    if not target_abs.startswith(base_dir_abs + os.sep) and target_abs != base_dir_abs:
+    if not target_abs.startswith(base_dir_abs + os.sep):
         return False
-    if not os.path.exists(target_abs) or not os.path.isfile(target_abs):
+    if not os.path.isfile(target_abs):
         return False
     try:
         if os.path.getsize(target_abs) == 0:
@@ -510,22 +512,23 @@ def _safe_resolve(raw: str, allowed_subdirs: list) -> str:
         return ""
 
     base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
-    bname = os.path.basename(raw_str)
+    bname = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', os.path.basename(raw_str)).lstrip(".-")
 
     # 1. Try allowed subdirectories first (most common and safest)
     if bname and bname not in (".", ".."):
         for subdir in allowed_subdirs:
             sub_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, subdir)))
             candidate = os.path.realpath(os.path.abspath(os.path.join(sub_dir_abs, bname)))
-            if candidate.startswith(sub_dir_abs + os.sep) or candidate == sub_dir_abs:
-                if os.path.isfile(candidate) or os.path.isdir(candidate):
-                    return os.path.relpath(candidate, base_dir_abs).replace("\\", "/")
+            if not candidate.startswith(sub_dir_abs + os.sep):
+                continue
+            if os.path.isfile(candidate):
+                return os.path.relpath(candidate, base_dir_abs).replace("\\", "/")
 
     # 2. Try direct relative path inside BASE_DIR
     target_path = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, raw_str)))
-    if not target_path.startswith(base_dir_abs + os.sep) and target_path != base_dir_abs:
+    if not target_path.startswith(base_dir_abs + os.sep):
         return ""
-    if os.path.isfile(target_path) or os.path.isdir(target_path):
+    if os.path.isfile(target_path):
         return os.path.relpath(target_path, base_dir_abs).replace("\\", "/")
 
     return ""
@@ -566,7 +569,7 @@ def resolve_output_file(raw_output: str) -> str:
     sub_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, sub)))
     target_path = os.path.realpath(os.path.abspath(os.path.join(sub_dir_abs, bname)))
 
-    if not target_path.startswith(sub_dir_abs + os.sep) and target_path != sub_dir_abs:
+    if not target_path.startswith(sub_dir_abs + os.sep):
         return ""
     return os.path.relpath(target_path, base_dir_abs).replace("\\", "/")
 
@@ -588,7 +591,7 @@ def get_status_file_path(job_id: Any) -> str:
     base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
     temp_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, "data", "runtime", "temp")))
     target = os.path.realpath(os.path.abspath(os.path.join(temp_dir_abs, f"status_{jid}.json" if jid != "default" else "status.json")))
-    if not target.startswith(temp_dir_abs + os.sep) and target != temp_dir_abs:
+    if not target.startswith(temp_dir_abs + os.sep):
         return "data/runtime/temp/status.json"
     return os.path.relpath(target, base_dir_abs).replace("\\", "/")
 
@@ -598,7 +601,7 @@ def get_log_file_path(job_id: Any) -> str:
     base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
     logs_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, "data", "runtime", "logs")))
     target = os.path.realpath(os.path.abspath(os.path.join(logs_dir_abs, f"pipeline_{jid}.log" if jid != "default" else "pipeline.log")))
-    if not target.startswith(logs_dir_abs + os.sep) and target != logs_dir_abs:
+    if not target.startswith(logs_dir_abs + os.sep):
         return "data/runtime/logs/pipeline.log"
     return os.path.relpath(target, base_dir_abs).replace("\\", "/")
 

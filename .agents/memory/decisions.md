@@ -87,3 +87,7 @@ Centralized subprocess.Popen and async process spawning into spawn_background_pr
 
 ## [2026-09-20] CodeQL Path Injection Canonical Barrier Architecture
 Implemented centralized canonical boundary containment in routers/common.py using os.path.realpath, os.path.abspath, and prefix startswith checks. Resolved CodeQL py/path-injection, py/command-line-injection, and py/xml-bomb across common.py, jobs.py, videos.py, streetview.py, presets.py, and scripts/streetview_gpx.py.
+
+
+## [2026-09-20] CodeQL AST Barrier Guard Architecture and CLI Sanitization
+CodeQL Python PathInjection and CommandInjection dataflow analyzers require pure single-condition startswith barrier guards rather than compound binary expressions. Hardened argument coercion with safe_choice/safe_number and eliminated exception leakage across all API routers.

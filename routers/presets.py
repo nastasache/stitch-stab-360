@@ -77,9 +77,9 @@ async def api_load_preset(filename: str):
     safe_name = sanitize_preset_filename(filename)
     base_presets_abs = os.path.realpath(os.path.abspath(str(user_presets_dir)))
     target_abs = os.path.realpath(os.path.abspath(os.path.join(base_presets_abs, safe_name)))
-    if not target_abs.startswith(base_presets_abs + os.sep) and target_abs != base_presets_abs:
+    if not target_abs.startswith(base_presets_abs + os.sep):
         return JSONResponse({"success": False, "error": f"Invalid preset filename: {safe_name}"}, status_code=400)
-    if not os.path.exists(target_abs) or not os.path.isfile(target_abs):
+    if not os.path.isfile(target_abs):
         return JSONResponse({"success": False, "error": f"File not found: {safe_name}"}, status_code=404)
     try:
         with open(target_abs, "r", encoding="utf-8") as f:
@@ -132,7 +132,7 @@ async def api_save_preset(request: Request):
     safe_name = sanitize_preset_filename(filename)
     base_presets_abs = os.path.realpath(os.path.abspath(str(user_presets_dir)))
     target_abs = os.path.realpath(os.path.abspath(os.path.join(base_presets_abs, safe_name)))
-    if not target_abs.startswith(base_presets_abs + os.sep) and target_abs != base_presets_abs:
+    if not target_abs.startswith(base_presets_abs + os.sep):
         return JSONResponse({"success": False, "error": "Invalid preset filename"}, status_code=400)
 
     if isinstance(config_data, dict):

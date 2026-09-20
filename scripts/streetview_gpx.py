@@ -18,10 +18,7 @@ import datetime
 import time
 import subprocess
 import shutil
-try:
-    import defusedxml.ElementTree as ET
-except ImportError:
-    import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 
 WIN_NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
@@ -91,8 +88,10 @@ def get_video_info(video_path):
 
     base_dir_abs = os.path.realpath(os.path.abspath(_REPO_ROOT))
     abs_video_path = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, clean_path) if not os.path.isabs(clean_path) else clean_path))
-    if not abs_video_path.startswith(base_dir_abs + os.sep) and abs_video_path != base_dir_abs:
+    if not abs_video_path.startswith(base_dir_abs + os.sep):
         raise ValueError(f"Invalid video path outside workspace boundaries: {clean_path!r}")
+    if not os.path.isfile(abs_video_path):
+        return 0.0, 3840, 1920, 30.0, None
 
     ffprobe_bin = "ffprobe"
     if callable(resolve_ffprobe):
@@ -222,7 +221,7 @@ def parse_checkpoint_list(checkpoints_input):
         if "\n" not in s_input and "," not in s_input and "\0" not in s_input and not s_input.startswith("-") and (s_input.endswith(".json") or s_input.endswith(".txt")):
             base_dir_abs = os.path.realpath(os.path.abspath(_REPO_ROOT))
             target_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, s_input) if not os.path.isabs(s_input) else s_input))
-            if (target_abs.startswith(base_dir_abs + os.sep) or target_abs == base_dir_abs) and os.path.isfile(target_abs):
+            if target_abs.startswith(base_dir_abs + os.sep) and os.path.isfile(target_abs):
                 try:
                     with open(target_abs, "r", encoding="utf-8") as f:
                         content = f.read().strip()
@@ -456,7 +455,7 @@ def parse_gpx_file(gpx_file_path):
     clean_path = str(gpx_file_path).strip()
     base_dir_abs = os.path.realpath(os.path.abspath(_REPO_ROOT))
     target_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, clean_path) if not os.path.isabs(clean_path) else clean_path))
-    if not target_abs.startswith(base_dir_abs + os.sep) and target_abs != base_dir_abs:
+    if not target_abs.startswith(base_dir_abs + os.sep):
         return []
     if not os.path.isfile(target_abs):
         return []
