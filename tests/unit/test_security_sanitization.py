@@ -22,7 +22,9 @@ from routers.common import (
     get_status_file_path,
     get_log_file_path,
     is_valid_video_file,
-    is_valid_image_file
+    is_valid_image_file,
+    resolve_runtime_file,
+    safe_runtime_write_path
 )
 
 
@@ -128,6 +130,23 @@ class TestSecuritySanitization(unittest.TestCase):
         self.assertFalse(is_valid_video_file(""))
         self.assertFalse(is_valid_image_file("../../boot.ini"))
         self.assertFalse(is_valid_image_file(""))
+
+    def test_runtime_helpers(self):
+        """Ensure safe_runtime_write_path and resolve_runtime_file enforce strict boundaries."""
+        wp = safe_runtime_write_path("output.json", subdir="data/runtime/work")
+        self.assertEqual(wp, "data/runtime/work/output.json")
+
+        # Traversal in write path
+        wp_trav = safe_runtime_write_path("../../Windows/bad.txt", subdir="data/runtime/work")
+        self.assertEqual(wp_trav, "data/runtime/work/bad.txt")
+
+        # Disallow dash or null byte
+        self.assertEqual(safe_runtime_write_path("-bad.txt"), "")
+        self.assertEqual(safe_runtime_write_path("bad\0.txt"), "")
+
+        # resolve_runtime_file traversal
+        self.assertEqual(resolve_runtime_file("../../etc/passwd"), "")
+        self.assertEqual(resolve_runtime_file("-option"), "")
 
 
 if __name__ == "__main__":

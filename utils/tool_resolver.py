@@ -131,7 +131,8 @@ def probe_nvenc(ffmpeg_bin: Optional[str] = None, force_refresh: bool = False) -
         _NVENC_PROBE_CACHE[cache_key] = res
         return res
     except Exception as e:
-        res = (False, str(e))
+        print(f"[WARN] NVENC hardware probe error: {e}", file=sys.stderr)
+        res = (False, "NVENC hardware probe error.")
         _NVENC_PROBE_CACHE[cache_key] = res
         return res
 

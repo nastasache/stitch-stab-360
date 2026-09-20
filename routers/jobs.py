@@ -44,7 +44,9 @@ from routers.common import (
     check_disk_space,
     safe_job_id,
     get_status_file_path,
-    get_log_file_path
+    get_log_file_path,
+    resolve_runtime_file,
+    safe_runtime_write_path
 )
 
 router = APIRouter(tags=["jobs"])
@@ -146,12 +148,12 @@ async def api_check_intermediates(
     active_status = ""
     active_phase = ""
 
-    clean_jid = re.sub(r'[^a-zA-Z0-9_\-]', '', job_id) if job_id else ""
-    sf = f"data/runtime/temp/status_{clean_jid}.json" if clean_jid else "data/runtime/temp/status.json"
+    sf = get_status_file_path(job_id)
+    sf_res = resolve_runtime_file(sf, ["data/runtime/temp"])
 
-    if not test_num and os.path.exists(sf):
+    if not test_num and sf_res and os.path.isfile(sf_res):
         try:
-            with open(sf, "r", encoding="utf-8") as f_st:
+            with open(sf_res, "r", encoding="utf-8") as f_st:
                 s_data = json.load(f_st)
             if isinstance(s_data, dict):
                 st = s_data.get("status", "")
@@ -180,7 +182,7 @@ async def api_check_intermediates(
                     active_job_start_time = s_data.get("start_time")
                     if active_job_start_time is None and s_data.get("elapsed") is not None:
                         try:
-                            active_job_start_time = os.path.getmtime(sf) - float(s_data.get("elapsed", 0)) - 10.0
+                            active_job_start_time = os.path.getmtime(sf_res) - float(s_data.get("elapsed", 0)) - 10.0
                         except Exception:
                             pass
                     if not target_base and not output_name and not input_name:
@@ -258,9 +260,10 @@ async def api_check_intermediates(
         resolved_config = None
 
         cfg_file = f"data/runtime/work/{target_base}_config.json" if target_base else ""
-        if cfg_file and os.path.exists(cfg_file):
+        cfg_res = resolve_runtime_file(cfg_file, ["data/runtime/work"])
+        if cfg_res and os.path.isfile(cfg_res):
             try:
-                with open(cfg_file, "r", encoding="utf-8") as f_cfg:
+                with open(cfg_res, "r", encoding="utf-8") as f_cfg:
                     cfg_data = json.load(f_cfg)
                 if isinstance(cfg_data, dict):
                     resolved_config = cfg_data
@@ -284,12 +287,15 @@ async def api_check_intermediates(
         master_stems = set()
         clean_target = re.sub(r'[^a-zA-Z0-9_\-]', '', target_base)
         clean_job = re.sub(r'[^a-zA-Z0-9_\-]', '', (job_id or (resolved_config.get("job_id", "") if isinstance(resolved_config, dict) else "")))
-        for cf in [
+        for cf_raw in [
             f"data/runtime/temp/chosen_transforms_{clean_job}.json" if clean_job else None,
             f"data/runtime/temp/chosen_transforms_{clean_target}.json" if clean_target else None,
             "data/runtime/temp/chosen_transforms.json"
         ]:
-            if cf and os.path.exists(cf) and os.path.getsize(cf) > 2:
+            if not cf_raw:
+                continue
+            cf = resolve_runtime_file(cf_raw, ["data/runtime/temp"])
+            if cf and os.path.isfile(cf) and os.path.getsize(cf) > 2:
                 try:
                     with open(cf, "r", encoding="utf-8") as f_cf:
                         c_data = json.load(f_cf)
@@ -307,8 +313,8 @@ async def api_check_intermediates(
                     expected_chain = active_methods[:s_idx + 1]
                     chain_str = "_".join(expected_chain)
                     for ext in [f".{out_ext}", ".MP4", ".mp4"]:
-                        cand_exact = f"data/runtime/work/{target_base}_{chain_str}{ext}"
-                        if is_valid_video_file(cand_exact):
+                        cand_exact = resolve_runtime_file(f"data/runtime/work/{target_base}_{chain_str}{ext}", ["data/runtime/work"])
+                        if cand_exact and is_valid_video_file(cand_exact):
                             if active_job_start_time is not None:
                                 try:
                                     if os.path.getmtime(cand_exact) < (active_job_start_time - 5.0):
@@ -319,8 +325,8 @@ async def api_check_intermediates(
 
                 # 2. Direct simple candidate {target_base}_{s}{ext}
                 for ext in [f".{out_ext}", ".MP4", ".mp4"]:
-                    cand = f"data/runtime/work/{target_base}_{s}{ext}"
-                    if is_valid_video_file(cand):
+                    cand = resolve_runtime_file(f"data/runtime/work/{target_base}_{s}{ext}", ["data/runtime/work"])
+                    if cand and is_valid_video_file(cand):
                         if active_job_start_time is not None:
                             try:
                                 if os.path.getmtime(cand) < (active_job_start_time - 5.0):
@@ -331,23 +337,27 @@ async def api_check_intermediates(
 
                 # 3. Glob pattern fallback
                 for ext in [f".{out_ext}", ".MP4", ".mp4"]:
-                    pattern = f"data/runtime/work/{target_base}_*_{s}{ext}"
+                    clean_t_base = re.sub(r'[^a-zA-Z0-9_\-]', '', target_base)
+                    pattern = f"data/runtime/work/{clean_t_base}_*_{s}{ext}"
                     matches = [
                         m.replace("\\", "/") for m in glob.glob(pattern)
                         if not m.endswith(f"_VR{ext}") and not m.endswith(f"_clean{ext}") and is_valid_video_file(m)
                     ]
                     valid_matches = []
                     for m in matches:
-                        m_stem = Path(m).stem
+                        m_res = resolve_runtime_file(m, ["data/runtime/work"])
+                        if not m_res:
+                            continue
+                        m_stem = Path(m_res).stem
                         if m_stem in master_stems or m_stem.endswith("_master") or m_stem.endswith("_composed"):
                             continue
                         if active_job_start_time is not None:
                             try:
-                                if os.path.getmtime(m) < (active_job_start_time - 5.0):
+                                if os.path.getmtime(m_res) < (active_job_start_time - 5.0):
                                     continue
                             except Exception:
                                 continue
-                        valid_matches.append(m)
+                        valid_matches.append(m_res)
 
                     if valid_matches:
                         def _match_rank(path_str):
@@ -392,7 +402,7 @@ async def api_check_intermediates(
             traveldir_file = cand_traveldir
 
         if not active_status or active_status == "completed":
-            for direct in [
+            for direct_raw in [
                 f"data/runtime/work/{target_base}_nadir.{out_ext}",
                 f"data/runtime/work/{target_base}_nadir.MP4",
                 f"data/runtime/work/{target_base}_nadir.mp4",
@@ -402,7 +412,8 @@ async def api_check_intermediates(
                 f"data/runtime/work/{target_base}.MP4",
                 f"data/runtime/work/{target_base}.mp4"
             ]:
-                if is_valid_video_file(direct):
+                direct = resolve_runtime_file(direct_raw, ["data/runtime/work"])
+                if direct and is_valid_video_file(direct):
                     if active_job_start_time is not None:
                         try:
                             if os.path.getmtime(direct) < (active_job_start_time - 5.0):
@@ -413,10 +424,11 @@ async def api_check_intermediates(
                     break
 
         def _is_valid_aux(aux_p):
-            if not os.path.exists(aux_p): return False
+            aux_res = resolve_runtime_file(aux_p, ["data/runtime/work"])
+            if not aux_res or not os.path.isfile(aux_res): return False
             if active_job_start_time is not None:
                 try:
-                    if os.path.getmtime(aux_p) < (active_job_start_time - 5.0): return False
+                    if os.path.getmtime(aux_res) < (active_job_start_time - 5.0): return False
                 except Exception:
                     return False
             return True
@@ -474,25 +486,30 @@ async def api_check_intermediates(
 
     orig_frame_url = ""
     if resolved_raw_input and os.path.exists(resolved_raw_input):
-        orig_frame_file = f"data/runtime/temp/frame_{Path(resolved_raw_input).stem}_at_0_000.jpg"
-        if not os.path.exists(orig_frame_file) or os.path.getsize(orig_frame_file) == 0:
-            os.makedirs("data/runtime/temp", exist_ok=True)
-            extract_cmd = ["ffmpeg", "-y", "-ss", "0.0", "-i", resolved_raw_input, "-vframes", "1", orig_frame_file]
-            await run_async_subprocess(*extract_cmd)
-        if os.path.exists(orig_frame_file) and os.path.getsize(orig_frame_file) > 0:
-            orig_frame_url = orig_frame_file
+        orig_clean_stem = re.sub(r'[^a-zA-Z0-9_\-]', '', Path(resolved_raw_input).stem) or "input"
+        orig_frame_file = safe_runtime_write_path(f"frame_{orig_clean_stem}_at_0_000.jpg", subdir="data/runtime/temp")
+        if orig_frame_file:
+            if not os.path.exists(orig_frame_file) or os.path.getsize(orig_frame_file) == 0:
+                os.makedirs("data/runtime/temp", exist_ok=True)
+                extract_cmd = ["ffmpeg", "-y", "-ss", "0.0", "-i", resolved_raw_input, "-vframes", "1", orig_frame_file]
+                await run_async_subprocess(*extract_cmd)
+            if os.path.exists(orig_frame_file) and os.path.getsize(orig_frame_file) > 0:
+                orig_frame_url = orig_frame_file
 
     preview_frame_url = ""
     if test_num or stitched_file or final_file:
         stitch_source = stitched_file or final_file or telemetry_file or ""
-        if stitch_source and os.path.exists(stitch_source):
-            preview_frame_file = f"data/runtime/temp/preview_{target_base}.png"
-            if not os.path.exists(preview_frame_file) or os.path.getsize(preview_frame_file) == 0:
-                os.makedirs("data/runtime/temp", exist_ok=True)
-                extract_prev_cmd = ["ffmpeg", "-y", "-ss", "0.0", "-i", stitch_source, "-vframes", "1", preview_frame_file]
-                await run_async_subprocess(*extract_prev_cmd)
-            if os.path.exists(preview_frame_file) and os.path.getsize(preview_frame_file) > 0:
-                preview_frame_url = preview_frame_file
+        stitch_res = resolve_runtime_file(stitch_source, ["data/runtime/work", "data/input/videos"])
+        if stitch_res and os.path.exists(stitch_res):
+            preview_clean_base = re.sub(r'[^a-zA-Z0-9_\-]', '', target_base) or "preview"
+            preview_frame_file = safe_runtime_write_path(f"preview_{preview_clean_base}.png", subdir="data/runtime/temp")
+            if preview_frame_file:
+                if not os.path.exists(preview_frame_file) or os.path.getsize(preview_frame_file) == 0:
+                    os.makedirs("data/runtime/temp", exist_ok=True)
+                    extract_prev_cmd = ["ffmpeg", "-y", "-ss", "0.0", "-i", stitch_res, "-vframes", "1", preview_frame_file]
+                    await run_async_subprocess(*extract_prev_cmd)
+                if os.path.exists(preview_frame_file) and os.path.getsize(preview_frame_file) > 0:
+                    preview_frame_url = preview_frame_file
 
     matched_job_id = ""
     if resolved_config and resolved_config.get("job_id"):
@@ -832,23 +849,30 @@ async def api_start_job(request: Request):
         pipeline_cmd.extend(["--streetview_mode", safe_choice(gp("streetview_mode"), ["A", "B"], PIPELINE_DEFAULTS["streetview_mode"])])
         sv_cps = str(gp("streetview_checkpoints", "")).strip()
         if sv_cps and not sv_cps.startswith("-"):
-            pipeline_cmd.extend(["--streetview_checkpoints", sv_cps])
+            sv_cps_file = safe_runtime_write_path(f"cps_{job_id}.json", subdir="data/runtime/temp")
+            if sv_cps_file:
+                try:
+                    with open(sv_cps_file, "w", encoding="utf-8") as f_cps:
+                        f_cps.write(sv_cps)
+                    pipeline_cmd.extend(["--streetview_checkpoints", sv_cps_file])
+                except Exception:
+                    pass
         raw_sv_gpx = resolve_gpx_file(str(gp("streetview_gpx_path", "")))
         if raw_sv_gpx and not raw_sv_gpx.startswith("-"):
             pipeline_cmd.extend(["--streetview_gpx_path", raw_sv_gpx])
-        sv_st = str(gp("streetview_start_time", "")).strip()
-        if sv_st and not sv_st.startswith("-"):
+        sv_st = re.sub(r'[^a-zA-Z0-9:\.\-+_]', '', str(gp("streetview_start_time", "")).strip())
+        if sv_st:
             pipeline_cmd.extend(["--streetview_start_time", sv_st])
         pipeline_cmd.extend(["--streetview_time_offset", safe_number(gp("streetview_time_offset"), "0")])
         if str(gp("streetview_auto_pad", "1")) == "0": pipeline_cmd.append("--streetview_no_auto_pad")
-        sv_bitrate = str(gp("streetview_bitrate", PIPELINE_DEFAULTS["streetview_bitrate"])).strip()
-        if sv_bitrate and not sv_bitrate.startswith("-"):
+        sv_bitrate = re.sub(r'[^0-9a-zA-Z]', '', str(gp("streetview_bitrate", PIPELINE_DEFAULTS["streetview_bitrate"])).strip())
+        if sv_bitrate:
             pipeline_cmd.extend(["--streetview_bitrate", sv_bitrate])
-        sv_start_coord = str(gp("streetview_start_coord", "")).strip()
-        if sv_start_coord and not sv_start_coord.startswith("-"):
+        sv_start_coord = re.sub(r'[^0-9\.,\- ]', '', str(gp("streetview_start_coord", "")).strip())
+        if sv_start_coord:
             pipeline_cmd.extend(["--streetview_start_coord", sv_start_coord])
-        sv_end_coord = str(gp("streetview_end_coord", "")).strip()
-        if sv_end_coord and not sv_end_coord.startswith("-"):
+        sv_end_coord = re.sub(r'[^0-9\.,\- ]', '', str(gp("streetview_end_coord", "")).strip())
+        if sv_end_coord:
             pipeline_cmd.extend(["--streetview_end_coord", sv_end_coord])
         if str(gp("streetview_smooth_gps", "1")) == "1": pipeline_cmd.append("--streetview_smooth_gps")
         if str(gp("streetview_strip_audio", "1")) == "0":
@@ -856,8 +880,8 @@ async def api_start_job(request: Request):
         else:
             pipeline_cmd.append("--streetview_strip_audio")
 
-    video_bitrate = str(gp("video_bitrate", "")).strip()
-    if video_bitrate and not video_bitrate.startswith("-"):
+    video_bitrate = re.sub(r'[^0-9a-zA-Z]', '', str(gp("video_bitrate", "")).strip())
+    if video_bitrate:
         pipeline_cmd.extend(["--video_bitrate", video_bitrate])
     if str(gp("remove_audio", "0")) == "1": pipeline_cmd.append("--remove_audio")
     if str(gp("prompt_transforms", "1")) == "0": pipeline_cmd.append("--no_prompt_transforms")
@@ -892,20 +916,25 @@ async def api_job_status(job_id: str):
     Returns:
         JSONResponse containing job status dictionary and tailing log output.
     """
-    job_id = re.sub(r'[^a-zA-Z0-9_\-]', '', job_id)
-
+    clean_jid = safe_job_id(job_id)
+    log_candidates = [
+        f"data/runtime/logs/pipeline_{clean_jid}.log",
+        f"data/runtime/logs/stitch_pipeline_{clean_jid}.log",
+        "data/runtime/logs/pipeline.log",
+        "data/runtime/logs/stitch_pipeline.log"
+    ] if clean_jid and clean_jid != "default" else [
+        "data/runtime/logs/pipeline.log",
+        "data/runtime/logs/stitch_pipeline.log"
+    ]
     log_file = ""
-    if job_id and os.path.exists(f"data/runtime/logs/pipeline_{job_id}.log"):
-        log_file = f"data/runtime/logs/pipeline_{job_id}.log"
-    elif job_id and os.path.exists(f"data/runtime/logs/stitch_pipeline_{job_id}.log"):
-        log_file = f"data/runtime/logs/stitch_pipeline_{job_id}.log"
-    elif not job_id and os.path.exists("data/runtime/logs/pipeline.log"):
-        log_file = "data/runtime/logs/pipeline.log"
-    elif not job_id and os.path.exists("data/runtime/logs/stitch_pipeline.log"):
-        log_file = "data/runtime/logs/stitch_pipeline.log"
+    for lc in log_candidates:
+        valid_lc = resolve_runtime_file(lc, ["data/runtime/logs"])
+        if valid_lc and os.path.isfile(valid_lc):
+            log_file = valid_lc
+            break
 
     log_content = ""
-    if log_file and os.path.exists(log_file):
+    if log_file and os.path.isfile(log_file):
         try:
             with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
                 f.seek(0, 2)
@@ -915,15 +944,10 @@ async def api_job_status(job_id: str):
         except Exception:
             pass
 
-    sf = ""
-    if job_id:
-        target_sf = get_status_file_path(job_id)
-        if os.path.exists(target_sf):
-            sf = target_sf
-    elif os.path.exists("data/runtime/temp/status.json"):
-        sf = "data/runtime/temp/status.json"
+    sf_target = get_status_file_path(clean_jid) if clean_jid and clean_jid != "default" else "data/runtime/temp/status.json"
+    sf = resolve_runtime_file(sf_target, ["data/runtime/temp"])
 
-    if sf and os.path.exists(sf):
+    if sf and os.path.isfile(sf):
         try:
             with open(sf, "r", encoding="utf-8") as f:
                 data = json.load(f)
@@ -967,27 +991,31 @@ async def api_cancel_job(job_id: str):
     Returns:
         JSONResponse confirming cancellation.
     """
-    job_id = re.sub(r'[^a-zA-Z0-9_\-]', '', job_id)
-    if job_id == "_":
-        job_id = ""
+    clean_jid = safe_job_id(job_id) if job_id and job_id != "_" else ""
 
     candidates_to_kill = set()
-    if job_id and job_id in _managed_pids:
-        candidates_to_kill.add(_managed_pids[job_id])
+    if clean_jid and clean_jid in _managed_pids:
+        candidates_to_kill.add(_managed_pids[clean_jid])
 
+    raw_status_files = [
+        f"data/runtime/temp/status_{clean_jid}.json" if clean_jid and clean_jid != "default" else None,
+        "data/runtime/temp/status.json"
+    ]
     status_files = []
-    if job_id:
-        status_files.append(f"data/runtime/temp/status_{job_id}.json")
-    status_files.append("data/runtime/temp/status.json")
+    for sf_raw in raw_status_files:
+        if not sf_raw: continue
+        sf_val = resolve_runtime_file(sf_raw, ["data/runtime/temp"])
+        if sf_val and sf_val not in status_files:
+            status_files.append(sf_val)
 
     for sf in status_files:
-        if os.path.exists(sf):
+        if os.path.isfile(sf):
             try:
                 with open(sf, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 if isinstance(data, dict) and "pid" in data:
                     pid = int(data["pid"])
-                    if pid in _managed_pids.values() or (job_id and _managed_pids.get(job_id) == pid) or not _managed_pids:
+                    if pid in _managed_pids.values() or (clean_jid and _managed_pids.get(clean_jid) == pid) or not _managed_pids:
                         candidates_to_kill.add(pid)
             except Exception:
                 pass
@@ -999,7 +1027,7 @@ async def api_cancel_job(job_id: str):
             print(f"[WARN] Failed to kill PID {pid}: {e}")
 
     for k, v in list(_managed_pids.items()):
-        if v in candidates_to_kill or (job_id and k == job_id):
+        if v in candidates_to_kill or (clean_jid and k == clean_jid):
             _managed_pids.pop(k, None)
     save_managed_pids()
 
@@ -1025,12 +1053,19 @@ async def api_clear_log(job_id: str):
     Returns:
         JSONResponse confirming the log file was emptied.
     """
-    job_id = re.sub(r'[^a-zA-Z0-9_\-]', '', job_id)
-    if job_id == "_":
-        job_id = ""
-    targets = [f"data/runtime/logs/pipeline_{job_id}.log", f"data/runtime/logs/stitch_pipeline_{job_id}.log", f"data/runtime/logs/backend_stitch_{job_id}.log"] if job_id else ["data/runtime/logs/pipeline.log", "data/runtime/logs/stitch_pipeline.log", "data/runtime/logs/backend_stitch.log"]
-    for t in targets:
-        if os.path.exists(t):
+    clean_jid = safe_job_id(job_id) if job_id and job_id != "_" else ""
+    raw_targets = [
+        f"data/runtime/logs/pipeline_{clean_jid}.log",
+        f"data/runtime/logs/stitch_pipeline_{clean_jid}.log",
+        f"data/runtime/logs/backend_stitch_{clean_jid}.log"
+    ] if clean_jid and clean_jid != "default" else [
+        "data/runtime/logs/pipeline.log",
+        "data/runtime/logs/stitch_pipeline.log",
+        "data/runtime/logs/backend_stitch.log"
+    ]
+    for t_raw in raw_targets:
+        t = resolve_runtime_file(t_raw, ["data/runtime/logs"])
+        if t and os.path.isfile(t):
             try:
                 with open(t, "w", encoding="utf-8"): pass
             except Exception: pass
@@ -1049,17 +1084,17 @@ async def api_reset_job(job_id: str):
     Returns:
         JSONResponse confirming state reset.
     """
-    job_id = re.sub(r'[^a-zA-Z0-9_\-]', '', job_id)
-    if job_id == "_":
-        job_id = ""
-    target_status_files = [f"data/runtime/temp/status_{job_id}.json"] if job_id else []
+    clean_jid = safe_job_id(job_id) if job_id and job_id != "_" else ""
+    target_status_files = [f"data/runtime/temp/status_{clean_jid}.json"] if clean_jid and clean_jid != "default" else []
     target_status_files.append("data/runtime/temp/status.json")
-    for sf in target_status_files:
-        try:
-            with open(sf, "w", encoding="utf-8") as _f_reset:
-                json.dump({"status": "idle", "phase": "idle", "progress": 0}, _f_reset)
-        except Exception:
-            pass
+    for sf_raw in target_status_files:
+        sf = safe_runtime_write_path(os.path.basename(sf_raw), subdir="data/runtime/temp")
+        if sf:
+            try:
+                with open(sf, "w", encoding="utf-8") as _f_reset:
+                    json.dump({"status": "idle", "phase": "idle", "progress": 0}, _f_reset)
+            except Exception:
+                pass
     return JSONResponse({"status": "success", "message": "Status reset to idle."})
 
 # ── Route: Jobs — resume pipeline ────────────────────────────────────────────
@@ -1080,10 +1115,10 @@ async def api_resume_pipeline(job_id: str):
         out_base = ""
     os.makedirs("data/runtime/work", exist_ok=True)
     ts_str = str(int(time.time()))
-    if out_base:
-        Path(f"data/runtime/work/{out_base}_resume_checkpoints.flag").write_text(ts_str, encoding="utf-8")
-    else:
-        Path("data/runtime/work/resume_checkpoints.flag").write_text(ts_str, encoding="utf-8")
+    flag_name = f"{out_base}_resume_checkpoints.flag" if out_base else "resume_checkpoints.flag"
+    flag_file = safe_runtime_write_path(flag_name, subdir="data/runtime/work")
+    if flag_file:
+        Path(flag_file).write_text(ts_str, encoding="utf-8")
     return JSONResponse({"status": "success", "message": "Pipeline resume flag created."})
 
 # ── Route: Jobs — save horizon checkpoints ───────────────────────────────────
@@ -1125,26 +1160,22 @@ async def api_save_checkpoints(request: Request, job_id: str = ""):
     if has_checkpoints:
         formatted_json = json.dumps(parsed, indent=2, ensure_ascii=False) + "\n"
         from scripts.stabilize_horizon import write_horizon_params_log
-        if out_base:
-            target_file = f"data/runtime/work/{out_base}_horizon_checkpoints.json"
+        target_name = f"{out_base}_horizon_checkpoints.json" if out_base else "horizon_checkpoints.json"
+        target_file = safe_runtime_write_path(target_name, subdir="data/runtime/work")
+        if target_file:
             Path(target_file).write_text(formatted_json, encoding="utf-8")
             saved_files.append(target_file)
-            log_file = f"data/runtime/work/{out_base}_horizon_params.log"
-            write_horizon_params_log(out_base, parsed, [log_file])
-            saved_files.append(log_file)
-        else:
-            default_file = "data/runtime/work/horizon_checkpoints.json"
-            Path(default_file).write_text(formatted_json, encoding="utf-8")
-            saved_files.append(default_file)
-            default_log = "data/runtime/work/horizon_params.log"
-            write_horizon_params_log("default", parsed, [default_log])
-            saved_files.append(default_log)
+            log_name = f"{out_base}_horizon_params.log" if out_base else "horizon_params.log"
+            log_file = safe_runtime_write_path(log_name, subdir="data/runtime/work")
+            if log_file:
+                write_horizon_params_log(out_base or "default", parsed, [log_file])
+                saved_files.append(log_file)
 
     ts_str = str(int(time.time()))
-    if out_base:
-        Path(f"data/runtime/work/{out_base}_resume_checkpoints.flag").write_text(ts_str, encoding="utf-8")
-    else:
-        Path("data/runtime/work/resume_checkpoints.flag").write_text(ts_str, encoding="utf-8")
+    flag_name = f"{out_base}_resume_checkpoints.flag" if out_base else "resume_checkpoints.flag"
+    flag_file = safe_runtime_write_path(flag_name, subdir="data/runtime/work")
+    if flag_file:
+        Path(flag_file).write_text(ts_str, encoding="utf-8")
 
     return JSONResponse({"status": "success", "saved_files": saved_files, "out_base": out_base, "checkpoints_count": len(parsed["checkpoints"]) if has_checkpoints else 0}, status_code=201)
 
@@ -1174,15 +1205,18 @@ async def api_sync_horizon_log(request: Request):
 
     os.makedirs("data/runtime/work", exist_ok=True)
     saved_files = []
-    log_file = f"data/runtime/work/{out_base}_horizon_params.log" if out_base else "data/runtime/work/horizon_params.log"
+    clean_base = re.sub(r'[^a-zA-Z0-9_\-]', '', out_base)
+    log_name = f"{clean_base}_horizon_params.log" if clean_base else "horizon_params.log"
+    log_file = safe_runtime_write_path(log_name, subdir="data/runtime/work")
 
-    if log_text:
-        Path(log_file).write_text(log_text, encoding="utf-8")
-        saved_files.append(log_file)
-    elif data:
-        from scripts.stabilize_horizon import write_horizon_params_log
-        write_horizon_params_log(out_base or "default", data, [log_file], video_name=video_name)
-        saved_files.append(log_file)
+    if log_file:
+        if log_text:
+            Path(log_file).write_text(log_text, encoding="utf-8")
+            saved_files.append(log_file)
+        elif data:
+            from scripts.stabilize_horizon import write_horizon_params_log
+            write_horizon_params_log(clean_base or "default", data, [log_file], video_name=video_name)
+            saved_files.append(log_file)
 
     return JSONResponse({"status": "success", "saved_files": saved_files, "out_base": out_base})
 
@@ -1257,22 +1291,23 @@ async def api_detect_checkpoints(request: Request):
         telemetry_cands.append(os.path.join(v_dir, f"{v_base}.gcsv"))
         telemetry_cands.append(os.path.join(v_dir, f"{os.path.basename(video_file)}.gcsv"))
 
-    for tc in telemetry_cands:
-        if tc and os.path.exists(tc) and os.path.getsize(tc) > 50:
+    for tc_raw in telemetry_cands:
+        tc = resolve_runtime_file(tc_raw, ["data/input/videos", "data/runtime/work", "data/input/gps"])
+        if tc and os.path.isfile(tc) and os.path.getsize(tc) > 50:
             found_telemetry = tc
             break
 
     # On-demand telemetry extraction if not already on disk
     if not found_telemetry and video_file and os.path.exists(video_file):
-        work_telem = f"data/runtime/work/{clean_video_no_ext}_telemetry.txt"
-        if os.path.exists(work_telem) and os.path.getsize(work_telem) > 50:
+        work_telem = safe_runtime_write_path(f"{clean_video_no_ext}_telemetry.txt", subdir="data/runtime/work")
+        if work_telem and os.path.isfile(work_telem) and os.path.getsize(work_telem) > 50:
             found_telemetry = work_telem
-        else:
+        elif work_telem:
             try:
                 os.makedirs("data/runtime/work", exist_ok=True)
                 ext_cmd = [sys.executable, "-B", "scripts/extract_telemetry.py", video_file, work_telem, "--source", "auto"]
                 await run_async_subprocess(*ext_cmd)
-                if os.path.exists(work_telem) and os.path.getsize(work_telem) > 50:
+                if os.path.isfile(work_telem) and os.path.getsize(work_telem) > 50:
                     found_telemetry = work_telem
             except Exception:
                 pass
@@ -1285,8 +1320,9 @@ async def api_detect_checkpoints(request: Request):
     if clean_video_no_ext:
         motion_cands.append(f"data/runtime/work/{clean_video_no_ext}.kopf360motion")
         motion_cands.append(f"data/runtime/work/{clean_video_no_ext}.kabsch360motion")
-    for mc in motion_cands:
-        if mc and os.path.exists(mc) and os.path.getsize(mc) > 50:
+    for mc_raw in motion_cands:
+        mc = resolve_runtime_file(mc_raw, ["data/runtime/work"])
+        if mc and os.path.isfile(mc) and os.path.getsize(mc) > 50:
             found_motion = mc
             break
 
@@ -1499,10 +1535,11 @@ async def api_get_report(file: str = Query("")):
     for base in ["data/output", "data/runtime/work", "data/runtime/temp", "data/runtime/logs"]:
         sub_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, base)))
         candidate = os.path.realpath(os.path.abspath(os.path.join(sub_dir_abs, clean_name)))
-        if candidate.startswith(sub_dir_abs + os.sep) or candidate == sub_dir_abs:
-            if os.path.isfile(candidate):
-                target_path = candidate
-                break
+        if not candidate.startswith(sub_dir_abs + os.sep):
+            continue
+        if os.path.isfile(candidate):
+            target_path = candidate
+            break
 
     if target_path and os.path.isfile(target_path):
         try:

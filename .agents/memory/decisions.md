@@ -91,3 +91,7 @@ Implemented centralized canonical boundary containment in routers/common.py usin
 
 ## [2026-09-20] CodeQL AST Barrier Guard Architecture and CLI Sanitization
 CodeQL Python PathInjection and CommandInjection dataflow analyzers require pure single-condition startswith barrier guards rather than compound binary expressions. Hardened argument coercion with safe_choice/safe_number and eliminated exception leakage across all API routers.
+
+
+## [2026-09-20] Runtime File Resolution and CLI Param Hardening
+Introduced resolve_runtime_file and safe_runtime_write_path in routers/common.py with single-condition startswith barriers. Sanitized all remaining form parameters in routers/jobs.py and eliminated NVENC exception leakage in utils/tool_resolver.py.

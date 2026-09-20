@@ -544,6 +544,42 @@ def resolve_input_file(raw_input: str) -> str:
     """
     return _safe_resolve(raw_input, ["data/input/videos", "data/runtime/work", "samples"])
 
+def resolve_runtime_file(raw_path: str, allowed_subdirs: Optional[list] = None) -> str:
+    """Safely resolve an internal runtime file path (work/temp/logs) within workspace.
+
+    Args:
+        raw_path: Target filename or workspace-relative path.
+        allowed_subdirs: Optional list of permitted subdirectories (defaults to runtime dirs).
+
+    Returns:
+        Workspace-relative path if valid and exists within allowed boundaries, else empty string.
+    """
+    subdirs = allowed_subdirs or ["data/runtime/work", "data/runtime/temp", "data/runtime/logs", "data/input/videos", "data/input/gps"]
+    return _safe_resolve(raw_path, subdirs)
+
+def safe_runtime_write_path(filename: str, subdir: str = "data/runtime/work") -> str:
+    """Generate a sanitized workspace-relative path for writing files in runtime directories.
+
+    Args:
+        filename: Target filename.
+        subdir: Subdirectory under workspace (e.g. data/runtime/work, data/runtime/temp).
+
+    Returns:
+        Sanitized workspace-relative path within the target subdirectory, or empty string.
+    """
+    if not filename or str(filename).strip().startswith("-") or "\0" in str(filename):
+        return ""
+    bname = os.path.basename(str(filename).strip())
+    bname = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', bname).lstrip(".-")
+    if not bname or bname in (".", ".."):
+        return ""
+    base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+    sub_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, subdir)))
+    target_path = os.path.realpath(os.path.abspath(os.path.join(sub_dir_abs, bname)))
+    if not target_path.startswith(sub_dir_abs + os.sep):
+        return ""
+    return os.path.relpath(target_path, base_dir_abs).replace("\\", "/")
+
 def resolve_output_file(raw_output: str) -> str:
     """Resolve an output video path, routing to data/output/ or data/runtime/work/.
 
