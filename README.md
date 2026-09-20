@@ -60,7 +60,7 @@ The fastest and most portable way to run the application across **Windows, Linux
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-username/stitch-stab-360.git
+git clone https://github.com/nastasache/stitch-stab-360.git
 cd stitch-stab-360
 
 # 2. Start the container
