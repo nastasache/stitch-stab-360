@@ -41,7 +41,10 @@ from routers.common import (
     _managed_pids,
     save_managed_pids,
     get_active_job,
-    check_disk_space
+    check_disk_space,
+    safe_job_id,
+    get_status_file_path,
+    get_log_file_path
 )
 
 router = APIRouter(tags=["jobs"])
@@ -498,8 +501,10 @@ async def api_check_intermediates(
         matched_job_id = job_id
     elif test_num:
         clean_num2 = re.sub(r'[^0-9]', '', test_num)
-        if clean_num2 and os.path.exists(f"data/runtime/temp/status_job_{clean_num2}.json"):
-            matched_job_id = f"job_{clean_num2}"
+        if clean_num2:
+            st_path = get_status_file_path(f"job_{clean_num2}")
+            if os.path.exists(st_path):
+                matched_job_id = f"job_{clean_num2}"
 
     graph_file = traveldir_graph_file or horizon_graph_file or cinematic_graph_file or vidstab_graph_file or kabsch_graph_file or kopf_graph_file or telemetry_graph_file
 
@@ -610,13 +615,10 @@ async def api_start_job(request: Request):
                 return JSONResponse({"status": "error", "error": "Street View Mode B requires a valid GPX log file. Please select an existing GPX file before starting."}, status_code=400)
 
     job_id_raw = str(gp("job_id", ""))
-    job_id     = re.sub(r'[^a-zA-Z0-9_\-]', '', job_id_raw)
-    if not job_id:
-        import uuid
-        job_id = f"job_{uuid.uuid4().hex[:12]}"
+    job_id     = safe_job_id(job_id_raw)
 
-    status_file = f"data/runtime/temp/status_{job_id}.json" if job_id else "data/runtime/temp/status.json"
-    log_file    = f"data/runtime/logs/pipeline_{job_id}.log" if job_id else "data/runtime/logs/pipeline.log"
+    status_file = get_status_file_path(job_id)
+    log_file    = get_log_file_path(job_id)
 
     os.makedirs("data/runtime/logs", exist_ok=True)
     os.makedirs("data/runtime/temp", exist_ok=True)
@@ -628,7 +630,10 @@ async def api_start_job(request: Request):
         except Exception as e:
             print(f"[WARN] run_pipeline: failed writing initial status to {sf!r}: {e}", file=sys.stderr)
 
-    output_name = f"data/runtime/work/{os.path.basename(raw_output)}"
+    output_name = resolve_output_file(raw_output)
+    if not output_name:
+        clean_out_base = re.sub(r'[^a-zA-Z0-9_\-]', '_', Path(os.path.basename(raw_output)).stem) or "output"
+        output_name = f"data/runtime/work/{clean_out_base}.mp4"
 
     blend_seams_val    = (str(gp("blend_seams", "1")) == "1" or str(gp("blend_seams", "")).lower() == "true")
     blend_width_raw    = int(float(gp("blend_width", "200")))
@@ -636,7 +641,7 @@ async def api_start_job(request: Request):
 
     try:
         os.makedirs("data/runtime/work", exist_ok=True)
-        out_base = Path(output_name).stem
+        out_base = re.sub(r'[^a-zA-Z0-9_\-]', '_', Path(output_name).stem)
         pipeline_cfg_raw = gp("pipeline_config", "")
         cfg_obj = None
         if pipeline_cfg_raw:
@@ -728,8 +733,12 @@ async def api_start_job(request: Request):
 
         cfg_json_str = json.dumps(cfg_obj, indent=2, ensure_ascii=False) + "\n"
         if out_base:
-            with open(f"data/runtime/work/{out_base}_config.json", "w", newline="\n", encoding="utf-8") as f_cfg:
-                f_cfg.write(cfg_json_str)
+            base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+            work_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, "data", "runtime", "work")))
+            cfg_file_abs = os.path.realpath(os.path.abspath(os.path.join(work_dir_abs, f"{out_base}_config.json")))
+            if cfg_file_abs.startswith(work_dir_abs + os.sep):
+                with open(cfg_file_abs, "w", newline="\n", encoding="utf-8") as f_cfg:
+                    f_cfg.write(cfg_json_str)
     except Exception as e_cfg:
         print(f"Warning: Failed to save config to work folder: {e_cfg}", flush=True)
 
@@ -905,9 +914,11 @@ async def api_job_status(job_id: str):
             pass
 
     sf = ""
-    if job_id and os.path.exists(f"data/runtime/temp/status_{job_id}.json"):
-        sf = f"data/runtime/temp/status_{job_id}.json"
-    elif not job_id and os.path.exists("data/runtime/temp/status.json"):
+    if job_id:
+        target_sf = get_status_file_path(job_id)
+        if os.path.exists(target_sf):
+            sf = target_sf
+    elif os.path.exists("data/runtime/temp/status.json"):
         sf = "data/runtime/temp/status.json"
 
     if sf and os.path.exists(sf):
@@ -1448,8 +1459,15 @@ async def api_choose_transforms(job_id: str, request: Request):
     payload = {"job_id": job_id, "chosen_transforms": chosen_list, "timestamp": time.time()}
     json_content = json.dumps(payload, indent=2) + "\n"
     if job_id:
-        Path(f"data/runtime/temp/chosen_transforms_{job_id}.json").write_text(json_content, encoding="utf-8")
-    Path("data/runtime/temp/chosen_transforms.json").write_text(json_content, encoding="utf-8")
+        clean_jid = safe_job_id(job_id)
+        base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+        temp_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, "data", "runtime", "temp")))
+        target_ct = os.path.realpath(os.path.abspath(os.path.join(temp_dir_abs, f"chosen_transforms_{clean_jid}.json")))
+        if target_ct.startswith(temp_dir_abs + os.sep):
+            with open(target_ct, "w", encoding="utf-8") as f:
+                f.write(json_content)
+    with open(os.path.join(str(BASE_DIR), "data", "runtime", "temp", "chosen_transforms.json"), "w", encoding="utf-8") as f:
+        f.write(json_content)
     return JSONResponse({"status": "success", "message": "Chosen transforms saved.", "chosen_transforms": chosen_list})
 
 # ── Route: Reports — get content ─────────────────────────────────────────────
@@ -1465,23 +1483,30 @@ async def api_get_report(file: str = Query("")):
     Returns:
         JSONResponse containing report text content or error status.
     """
+    if not file or str(file).strip().startswith("-") or "\0" in str(file):
+        return JSONResponse({"status": "error", "error": "Report file not found or inaccessible."}, status_code=404)
     raw_path   = file.replace('\\', '/').strip()
     clean_name = os.path.basename(raw_path)
-    allowed    = False
+    if not clean_name or clean_name in (".", ".."):
+        return JSONResponse({"status": "error", "error": "Report file not found or inaccessible."}, status_code=404)
+
+    base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
     target_path = None
     for base in ["data/output", "data/runtime/work", "data/runtime/temp", "data/runtime/logs"]:
-        cand = BASE_DIR / base / clean_name
-        if cand.exists():
-            target_path = cand
-            allowed = True
-            break
+        sub_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, base)))
+        candidate = os.path.realpath(os.path.abspath(os.path.join(sub_dir_abs, clean_name)))
+        if candidate.startswith(sub_dir_abs + os.sep) or candidate == sub_dir_abs:
+            if os.path.isfile(candidate):
+                target_path = candidate
+                break
 
-    if allowed and target_path and target_path.exists():
+    if target_path and os.path.isfile(target_path):
         try:
             with open(target_path, "r", encoding="utf-8", errors="replace") as f:
                 content = f.read(512 * 1024)
         except Exception as e:
-            return JSONResponse({"status": "error", "error": f"Failed to read file: {e}"}, status_code=500)
+            print(f"[ERROR] Failed to read report file {target_path}: {e}", file=sys.stderr)
+            return JSONResponse({"status": "error", "error": "Failed to read report file."}, status_code=500)
         return JSONResponse({"status": "success", "file": clean_name, "content": content})
     return JSONResponse({"status": "error", "error": "Report file not found or inaccessible."}, status_code=404)
 

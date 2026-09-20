@@ -271,11 +271,16 @@ def check_disk_space(input_file: str = "", num_stages: int = 1, min_margin_mb: i
         available_gb = free_bytes / (1024 ** 3)
 
         base_size_bytes = 0
-        if input_file and os.path.exists(input_file):
-            try:
-                base_size_bytes = os.path.getsize(input_file)
-            except Exception:
-                base_size_bytes = 0
+        if input_file and not str(input_file).strip().startswith("-"):
+            clean_in = str(input_file).strip()
+            base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+            target_in = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, clean_in) if not os.path.isabs(clean_in) else clean_in))
+            if target_in.startswith(base_dir_abs + os.sep) or target_in == base_dir_abs:
+                if os.path.exists(target_in):
+                    try:
+                        base_size_bytes = os.path.getsize(target_in)
+                    except Exception:
+                        base_size_bytes = 0
 
         # Fallback estimation if input size cannot be probed: 500MB per stage
         if base_size_bytes <= 0:
@@ -441,14 +446,21 @@ def is_valid_video_file(filename: str) -> bool:
     Returns:
         True if the file exists, has a non-zero size, and matches allowed video extensions.
     """
-    if not filename or not os.path.exists(filename):
+    if not filename or str(filename).strip().startswith("-"):
+        return False
+    clean = str(filename).strip()
+    base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+    target_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, clean) if not os.path.isabs(clean) else clean))
+    if not target_abs.startswith(base_dir_abs + os.sep) and target_abs != base_dir_abs:
+        return False
+    if not os.path.exists(target_abs) or not os.path.isfile(target_abs):
         return False
     try:
-        if os.path.getsize(filename) == 0:
+        if os.path.getsize(target_abs) == 0:
             return False
     except OSError:
         return False
-    ext = Path(filename).suffix.lower().lstrip(".")
+    ext = Path(target_abs).suffix.lower().lstrip(".")
     return ext in SERVER_CONFIG["ALLOWED_EXTENSIONS"]["video"]
 
 def is_valid_image_file(filename: str) -> bool:
@@ -460,14 +472,21 @@ def is_valid_image_file(filename: str) -> bool:
     Returns:
         True if the file exists, has a non-zero size, and matches allowed image extensions.
     """
-    if not filename or not os.path.exists(filename):
+    if not filename or str(filename).strip().startswith("-"):
+        return False
+    clean = str(filename).strip()
+    base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+    target_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, clean) if not os.path.isabs(clean) else clean))
+    if not target_abs.startswith(base_dir_abs + os.sep) and target_abs != base_dir_abs:
+        return False
+    if not os.path.exists(target_abs) or not os.path.isfile(target_abs):
         return False
     try:
-        if os.path.getsize(filename) == 0:
+        if os.path.getsize(target_abs) == 0:
             return False
     except OSError:
         return False
-    ext = Path(filename).suffix.lower().lstrip(".")
+    ext = Path(target_abs).suffix.lower().lstrip(".")
     return ext in SERVER_CONFIG["ALLOWED_EXTENSIONS"]["image"]
 
 def is_valid_media_file(filename: str) -> bool:
@@ -484,22 +503,31 @@ def _safe_resolve(raw: str, allowed_subdirs: list) -> str:
     Returns:
         Normalised relative path with forward slashes, or empty string if rejected.
     """
-    if not raw:
+    if not raw or str(raw).strip().startswith("-"):
         return ""
-    raw = raw.strip()
-    # Try basename-only lookup in allowed subdirs first (safest)
-    bname = os.path.basename(raw)
-    for subdir in allowed_subdirs:
-        candidate = BASE_DIR / subdir / bname
-        if candidate.exists():
-            return f"{subdir}/{bname}"
-    # As a last resort accept a path that resolves inside BASE_DIR
-    try:
-        resolved = (BASE_DIR / raw).resolve()
-        if resolved.is_relative_to(BASE_DIR) and resolved.exists():
-            return str(resolved.relative_to(BASE_DIR)).replace("\\", "/")
-    except (ValueError, OSError):
-        pass
+    raw_str = str(raw).strip().replace("\\", "/")
+    if "\0" in raw_str:
+        return ""
+
+    base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+    bname = os.path.basename(raw_str)
+
+    # 1. Try allowed subdirectories first (most common and safest)
+    if bname and bname not in (".", ".."):
+        for subdir in allowed_subdirs:
+            sub_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, subdir)))
+            candidate = os.path.realpath(os.path.abspath(os.path.join(sub_dir_abs, bname)))
+            if candidate.startswith(sub_dir_abs + os.sep) or candidate == sub_dir_abs:
+                if os.path.isfile(candidate) or os.path.isdir(candidate):
+                    return os.path.relpath(candidate, base_dir_abs).replace("\\", "/")
+
+    # 2. Try direct relative path inside BASE_DIR
+    target_path = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, raw_str)))
+    if not target_path.startswith(base_dir_abs + os.sep) and target_path != base_dir_abs:
+        return ""
+    if os.path.isfile(target_path) or os.path.isdir(target_path):
+        return os.path.relpath(target_path, base_dir_abs).replace("\\", "/")
+
     return ""
 
 def resolve_input_file(raw_input: str) -> str:
@@ -522,15 +550,57 @@ def resolve_output_file(raw_output: str) -> str:
     Returns:
         Sanitized workspace-relative target path.
     """
-    if not raw_output:
+    if not raw_output or str(raw_output).strip().startswith("-"):
         return ""
-    raw = raw_output.strip().replace("\\", "/")
+    raw = str(raw_output).strip().replace("\\", "/")
+    if "\0" in raw:
+        return ""
     bname = os.path.basename(raw)
-    if not bname:
+    if not bname or bname in (".", ".."):
         return ""
-    if raw.startswith("data/output/") or raw.startswith("data/output"):
-        return f"data/output/{bname}"
-    return f"data/runtime/work/{bname}"
+
+    bname = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', bname)
+    sub = "data/output" if (raw.startswith("data/output/") or raw.startswith("data/output")) else "data/runtime/work"
+
+    base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+    sub_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, sub)))
+    target_path = os.path.realpath(os.path.abspath(os.path.join(sub_dir_abs, bname)))
+
+    if not target_path.startswith(sub_dir_abs + os.sep) and target_path != sub_dir_abs:
+        return ""
+    return os.path.relpath(target_path, base_dir_abs).replace("\\", "/")
+
+def safe_job_id(job_id_raw: Any) -> str:
+    """Sanitize and validate a job identifier to prevent path injection.
+
+    Returns:
+        Safe alphanumeric job ID string.
+    """
+    clean = re.sub(r'[^a-zA-Z0-9_\-]', '', str(job_id_raw or '')).strip()
+    if not clean:
+        import uuid
+        clean = f"job_{uuid.uuid4().hex[:12]}"
+    return clean
+
+def get_status_file_path(job_id: Any) -> str:
+    """Return verified safe path to status JSON file within data/runtime/temp."""
+    jid = safe_job_id(job_id)
+    base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+    temp_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, "data", "runtime", "temp")))
+    target = os.path.realpath(os.path.abspath(os.path.join(temp_dir_abs, f"status_{jid}.json" if jid != "default" else "status.json")))
+    if not target.startswith(temp_dir_abs + os.sep) and target != temp_dir_abs:
+        return "data/runtime/temp/status.json"
+    return os.path.relpath(target, base_dir_abs).replace("\\", "/")
+
+def get_log_file_path(job_id: Any) -> str:
+    """Return verified safe path to log file within data/runtime/logs."""
+    jid = safe_job_id(job_id)
+    base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+    logs_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, "data", "runtime", "logs")))
+    target = os.path.realpath(os.path.abspath(os.path.join(logs_dir_abs, f"pipeline_{jid}.log" if jid != "default" else "pipeline.log")))
+    if not target.startswith(logs_dir_abs + os.sep) and target != logs_dir_abs:
+        return "data/runtime/logs/pipeline.log"
+    return os.path.relpath(target, base_dir_abs).replace("\\", "/")
 
 def resolve_nadir_logo(raw_logo: str) -> str:
     """Safely resolve a nadir patch image path within data/input/nadir/.

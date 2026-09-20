@@ -18,7 +18,10 @@ import datetime
 import time
 import subprocess
 import shutil
-import xml.etree.ElementTree as ET
+try:
+    import defusedxml.ElementTree as ET
+except ImportError:
+    import xml.etree.ElementTree as ET
 
 WIN_NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
@@ -83,10 +86,13 @@ def get_video_info(video_path):
         return 0.0, 3840, 1920, 30.0, None
 
     clean_path = str(video_path).strip()
-    if clean_path.startswith("-"):
-        raise ValueError(f"Invalid video path: {clean_path!r} cannot start with a dash")
+    if clean_path.startswith("-") or "\0" in clean_path:
+        raise ValueError(f"Invalid video path: {clean_path!r}")
 
-    abs_video_path = os.path.abspath(clean_path)
+    base_dir_abs = os.path.realpath(os.path.abspath(_REPO_ROOT))
+    abs_video_path = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, clean_path) if not os.path.isabs(clean_path) else clean_path))
+    if not abs_video_path.startswith(base_dir_abs + os.sep) and abs_video_path != base_dir_abs:
+        raise ValueError(f"Invalid video path outside workspace boundaries: {clean_path!r}")
 
     ffprobe_bin = "ffprobe"
     if callable(resolve_ffprobe):
@@ -212,21 +218,30 @@ def parse_checkpoint_list(checkpoints_input):
 
     raw_items = []
     if isinstance(checkpoints_input, str):
-        if os.path.exists(checkpoints_input):
-            try:
-                with open(checkpoints_input, "r", encoding="utf-8") as f:
-                    content = f.read().strip()
+        s_input = checkpoints_input.strip()
+        if "\n" not in s_input and "," not in s_input and "\0" not in s_input and not s_input.startswith("-") and (s_input.endswith(".json") or s_input.endswith(".txt")):
+            base_dir_abs = os.path.realpath(os.path.abspath(_REPO_ROOT))
+            target_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, s_input) if not os.path.isabs(s_input) else s_input))
+            if (target_abs.startswith(base_dir_abs + os.sep) or target_abs == base_dir_abs) and os.path.isfile(target_abs):
                 try:
-                    raw_items = json.loads(content)
+                    with open(target_abs, "r", encoding="utf-8") as f:
+                        content = f.read().strip()
+                    try:
+                        raw_items = json.loads(content)
+                    except Exception:
+                        raw_items = content.splitlines()
                 except Exception:
-                    raw_items = content.splitlines()
-            except Exception:
-                raw_items = []
+                    raw_items = []
+            else:
+                try:
+                    raw_items = json.loads(s_input)
+                except Exception:
+                    raw_items = s_input.splitlines()
         else:
             try:
-                raw_items = json.loads(checkpoints_input)
+                raw_items = json.loads(s_input)
             except Exception:
-                raw_items = checkpoints_input.splitlines()
+                raw_items = s_input.splitlines()
     elif isinstance(checkpoints_input, list):
         raw_items = checkpoints_input
 
@@ -436,8 +451,17 @@ def parse_gpx_file(gpx_file_path):
     Returns:
         List of dictionaries containing 'lat', 'lon', 'ele', 'dt', and 'time_str'.
     """
+    if not gpx_file_path or str(gpx_file_path).strip().startswith("-") or "\0" in str(gpx_file_path):
+        return []
+    clean_path = str(gpx_file_path).strip()
+    base_dir_abs = os.path.realpath(os.path.abspath(_REPO_ROOT))
+    target_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, clean_path) if not os.path.isabs(clean_path) else clean_path))
+    if not target_abs.startswith(base_dir_abs + os.sep) and target_abs != base_dir_abs:
+        return []
+    if not os.path.isfile(target_abs):
+        return []
     try:
-        tree = ET.parse(gpx_file_path)
+        tree = ET.parse(target_abs)
         root = tree.getroot()
         points = []
         for trkpt in root.findall('.//{*}trkpt') or root.findall('.//trkpt'):

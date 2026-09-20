@@ -152,3 +152,24 @@ StitchStab 360 follows a **strict non-destructive storage policy**: the engine *
 | `data/runtime/work/` | Intermediate stage renders (`*_telemetry.mp4`, `*_vidstab.trf`, cache). | Transient (manual purge). |
 | `data/runtime/temp/` | Scratch frame matrices, audio extractions, runtime masks, `status.json`. | Transient (safe to empty). |
 | `data/runtime/logs/` | Persistent text execution logs for past runs. | Retained for audit/debugging. |
+
+---
+
+## 🔒 Security & Path Sanitization Architecture
+
+To protect against directory traversal, command injection, and uncontrolled resource access, StitchStab 360 enforces a DRY (Don't Repeat Yourself) path containment pattern centralized in `routers/common.py`:
+
+### 1. Canonical Boundary Containment Barrier
+All user-influenced paths (video names, output filenames, nadir logos, GPX telemetry files, presets, status JSONs, and log files) are strictly validated using canonical realpaths:
+- Normalization via `os.path.realpath(os.path.abspath(...))` resolving symbolic links and relative path segments (`..`).
+- Strict prefix boundary check: `target.startswith(base_dir + os.sep)` ensuring the resolved target is contained within permitted workspace directories.
+- Immediate rejection of leading dashes (`-`), null bytes (`\0`), and path traversal sequences.
+
+### 2. Centralized Sanitization Primitives
+- `_safe_resolve`: Validates and resolves input files against allowable subdirectories.
+- `resolve_output_file`: Sanitizes output names and routes safely to `data/output/` or `data/runtime/work/`.
+- `safe_job_id`: Enforces strict alphanumeric identifiers (`^[a-zA-Z0-9_\-]+$`) for all jobs, preventing log or status file path tampering.
+- `get_status_file_path` & `get_log_file_path`: Guarantees job status and log paths remain inside `data/runtime/temp/` and `data/runtime/logs/`.
+- `is_valid_video_file` & `is_valid_image_file`: Enforces boundary checks prior to any filesystem `exists` or `getsize` probes.
+- `spawn_background_process`: Guarantees OS-specific detached process group creation flags and argument sanitization.
+- `defusedxml`: XML bomb and entity expansion protection for GPX track parsing.

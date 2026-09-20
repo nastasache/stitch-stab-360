@@ -21,7 +21,11 @@ from config.settings import BASE_DIR
 from routers.common import (
     resolve_input_file,
     resolve_gpx_file,
-    run_async_subprocess
+    resolve_output_file,
+    run_async_subprocess,
+    safe_job_id,
+    get_status_file_path,
+    get_log_file_path
 )
 
 router = APIRouter(tags=["streetview"])
@@ -61,7 +65,7 @@ async def api_export_streetview(request: Request):
                 input_videos_list.append(res_v)
 
     p = Path(input_name)
-    clean_stem = p.stem
+    clean_stem = re.sub(r'[^a-zA-Z0-9_\-]', '', p.stem)
     os.makedirs("data/runtime/work", exist_ok=True)
     os.makedirs("data/output", exist_ok=True)
 
@@ -88,8 +92,8 @@ async def api_export_streetview(request: Request):
             return JSONResponse({"status": "error", "error": "Street View Mode B requires a valid GPX log file. Please select an existing GPX file before starting."}, status_code=400)
 
     job_id_raw = str(gp("job_id", ""))
-    job_id = re.sub(r'[^a-zA-Z0-9_\-]', '', job_id_raw)
-    status_file = f"data/runtime/temp/status_{job_id}.json" if job_id else "data/runtime/temp/status.json"
+    job_id = safe_job_id(job_id_raw)
+    status_file = get_status_file_path(job_id)
     os.makedirs("data/runtime/temp", exist_ok=True)
     os.makedirs("data/runtime/logs", exist_ok=True)
 
@@ -131,7 +135,7 @@ async def api_export_streetview(request: Request):
     stdout, stderr = await run_async_subprocess(*cmd)
     output_details = (stdout + stderr).decode("utf-8", errors="ignore")
 
-    log_path = f"data/runtime/logs/pipeline_{job_id}.log" if job_id else "data/runtime/logs/pipeline.log"
+    log_path = get_log_file_path(job_id)
     try:
         with open(log_path, "a", encoding="utf-8") as f_log:
             f_log.write(f"\n--- [StreetView Standalone Export] ---\n{output_details}\n")
@@ -139,20 +143,26 @@ async def api_export_streetview(request: Request):
         print(f"[WARN] streetview export: failed writing log to {log_path!r}: {e}", file=sys.stderr)
 
     if os.path.exists(output_video) and os.path.getsize(output_video) > 0 and os.path.exists(output_gpx):
-        done_video = f"data/output/{clean_stem}_streetview{p.suffix}"
-        done_gpx   = f"data/output/{clean_stem}_streetview.gpx"
-        done_map   = f"data/output/{clean_stem}_streetview_map.html"
-        done_preview = "data/output/preview_map.html"
+        base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+        out_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, "data", "output")))
+        done_video_abs = os.path.realpath(os.path.abspath(os.path.join(out_dir_abs, f"{clean_stem}_streetview{p.suffix}")))
+        done_gpx_abs   = os.path.realpath(os.path.abspath(os.path.join(out_dir_abs, f"{clean_stem}_streetview.gpx")))
+        done_map_abs   = os.path.realpath(os.path.abspath(os.path.join(out_dir_abs, f"{clean_stem}_streetview_map.html")))
+        done_preview_abs = os.path.realpath(os.path.abspath(os.path.join(out_dir_abs, "preview_map.html")))
+        done_video = os.path.relpath(done_video_abs, base_dir_abs).replace("\\", "/")
+        done_gpx   = os.path.relpath(done_gpx_abs, base_dir_abs).replace("\\", "/")
+        done_map   = os.path.relpath(done_map_abs, base_dir_abs).replace("\\", "/")
         try:
-            if os.path.abspath(output_video) != os.path.abspath(done_video): shutil.copy2(output_video, done_video)
-            if os.path.abspath(output_gpx)   != os.path.abspath(done_gpx):   shutil.copy2(output_gpx, done_gpx)
+            if done_video_abs.startswith(out_dir_abs + os.sep) and done_gpx_abs.startswith(out_dir_abs + os.sep):
+                if os.path.abspath(output_video) != done_video_abs: shutil.copy2(output_video, done_video_abs)
+                if os.path.abspath(output_gpx)   != done_gpx_abs:   shutil.copy2(output_gpx, done_gpx_abs)
         except OSError:
             pass
-        if os.path.exists(output_map):
-            if os.path.abspath(output_map) != os.path.abspath(done_map):
-                try: shutil.copy2(output_map, done_map)
+        if os.path.exists(output_map) and done_map_abs.startswith(out_dir_abs + os.sep):
+            if os.path.abspath(output_map) != done_map_abs:
+                try: shutil.copy2(output_map, done_map_abs)
                 except OSError: pass
-            try: shutil.copy2(output_map, done_preview)
+            try: shutil.copy2(output_map, done_preview_abs)
             except Exception: pass
         return JSONResponse({
             "status": "success",
@@ -258,22 +268,29 @@ async def api_preview_streetview_map(request: Request):
         sv_smooth_gps   = str(gp("streetview_smooth_gps", "0")) in ["1", "true", "True"]
         sv_auto_pad     = str(gp("streetview_auto_pad", "1")) in ["1", "true", "True"]
 
+        base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+        valid_input_abs = None
+        if input_name and not input_name.startswith("-"):
+            candidate = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, input_name) if not os.path.isabs(input_name) else input_name))
+            if (candidate.startswith(base_dir_abs + os.sep) or candidate == base_dir_abs) and os.path.isfile(candidate):
+                valid_input_abs = candidate
+
         video_dur = 0.0
-        if input_name and not input_name.startswith("-") and os.path.exists(input_name):
+        if valid_input_abs:
             try:
-                probe_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", "--", os.path.abspath(input_name)]
+                probe_cmd = ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", "--", valid_input_abs]
                 stdout, stderr = await asyncio.wait_for(run_async_subprocess(*probe_cmd), timeout=5.0)
                 stdout_str = stdout.decode("utf-8", errors="ignore").strip()
                 if stdout_str:
                     video_dur = float(stdout_str)
             except Exception as e:
-                print(f"[WARN] route preview: ffprobe duration probe failed for {input_name!r}: {e}", file=sys.stderr)
+                print(f"[WARN] route preview: ffprobe duration probe failed for {valid_input_abs!r}: {e}", file=sys.stderr)
 
         start_utc_dt = None
         if sv_start_time and sv_start_time != "auto":
             start_utc_dt = streetview_gpx.parse_iso_or_utc(sv_start_time)
-        if not start_utc_dt and input_name and not input_name.startswith("-") and os.path.exists(input_name):
-            start_utc_dt = streetview_gpx.extract_video_creation_time_utc(input_name)
+        if not start_utc_dt and valid_input_abs:
+            start_utc_dt = streetview_gpx.extract_video_creation_time_utc(valid_input_abs)
         if not start_utc_dt:
             start_utc_dt = datetime.now(timezone.utc)
 
@@ -384,12 +401,14 @@ async def api_find_streetview_map(input: str = Query("")):
     Returns:
         JSONResponse indicating whether the map file exists and its URL.
     """
-    base_stem = Path(input).stem if input else ""
+    base_stem = re.sub(r'[^a-zA-Z0-9_\-]', '', Path(input).stem) if input else ""
     if not base_stem:
         return JSONResponse({"status": "error", "error": "No input provided"}, status_code=400)
 
-    target_map = f"data/output/{base_stem}_streetview_map.html"
-    if os.path.exists(target_map):
-        return JSONResponse({"status": "success", "map_url": target_map})
+    base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+    out_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, "data", "output")))
+    target_abs = os.path.realpath(os.path.abspath(os.path.join(out_dir_abs, f"{base_stem}_streetview_map.html")))
+    if target_abs.startswith(out_dir_abs + os.sep) and os.path.exists(target_abs):
+        return JSONResponse({"status": "success", "map_url": f"data/output/{base_stem}_streetview_map.html"})
 
     return JSONResponse({"status": "not_found", "map_url": None, "message": f"Map not found for input: {base_stem}"}, status_code=200)

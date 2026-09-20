@@ -222,10 +222,12 @@ async def api_inject_meta(request: Request):
 
     if os.path.exists(output_file) and os.path.getsize(output_file) > 0:
         os.makedirs("data/output", exist_ok=True)
-        done_file = f"data/output/{os.path.basename(output_file)}"
-        if os.path.abspath(output_file) != os.path.abspath(done_file):
+        base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+        out_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, "data", "output")))
+        done_file_abs = os.path.realpath(os.path.abspath(os.path.join(out_dir_abs, os.path.basename(output_file))))
+        if done_file_abs.startswith(out_dir_abs + os.sep) and os.path.abspath(output_file) != done_file_abs:
             try:
-                shutil.copy2(output_file, done_file)
+                shutil.copy2(output_file, done_file_abs)
             except OSError:
                 pass
         return JSONResponse({
@@ -259,9 +261,15 @@ async def api_crop_video(request: Request):
     if not raw_output:
         return JSONResponse({"status": "error", "error": "No output filename provided."}, status_code=400)
 
-    base_output = os.path.basename(raw_output)
-    os.makedirs("data/input/videos", exist_ok=True)
-    target_output = f"data/input/videos/{base_output}"
+    base_output = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', os.path.basename(raw_output)).lstrip(".-")
+    if not base_output:
+        return JSONResponse({"status": "error", "error": "Invalid output filename."}, status_code=400)
+    base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+    in_vids_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, "data", "input", "videos")))
+    target_abs = os.path.realpath(os.path.abspath(os.path.join(in_vids_abs, base_output)))
+    if not target_abs.startswith(in_vids_abs + os.sep):
+        return JSONResponse({"status": "error", "error": "Invalid output destination."}, status_code=400)
+    target_output = os.path.relpath(target_abs, base_dir_abs).replace("\\", "/")
     if os.path.abspath(target_output) == os.path.abspath(input_name):
         return JSONResponse({"status": "error", "error": "Output filename cannot overwrite source video."}, status_code=400)
 

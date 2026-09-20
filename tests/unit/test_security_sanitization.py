@@ -14,7 +14,15 @@ from routers.common import (
     safe_number,
     safe_choice,
     spawn_background_process,
-    run_async_subprocess
+    run_async_subprocess,
+    _safe_resolve,
+    resolve_input_file,
+    resolve_output_file,
+    safe_job_id,
+    get_status_file_path,
+    get_log_file_path,
+    is_valid_video_file,
+    is_valid_image_file
 )
 
 
@@ -67,6 +75,59 @@ class TestSecuritySanitization(unittest.TestCase):
         """Ensure spawn_background_process rejects an empty command list."""
         with self.assertRaises(ValueError):
             spawn_background_process([])
+
+    def test_safe_job_id(self):
+        """Ensure safe_job_id removes illegal characters and generates safe IDs."""
+        self.assertEqual(safe_job_id("job_abc-123"), "job_abc-123")
+        self.assertEqual(safe_job_id("../../etc/passwd"), "etcpasswd")
+        # Empty or None generates fallback
+        self.assertTrue(safe_job_id("").startswith("job_"))
+        self.assertTrue(safe_job_id(None).startswith("job_"))
+
+    def test_safe_resolve_traversal_rejected(self):
+        """Ensure directory traversal attempts are rejected."""
+        self.assertEqual(_safe_resolve("../../Windows/System32/cmd.exe", ["samples"]), "")
+        self.assertEqual(_safe_resolve("/etc/passwd", ["samples"]), "")
+        self.assertEqual(_safe_resolve("..\\..\\secret.txt", ["samples"]), "")
+        self.assertEqual(_safe_resolve("-option", ["samples"]), "")
+        self.assertEqual(_safe_resolve("test\0bad.mp4", ["samples"]), "")
+
+    def test_resolve_output_file(self):
+        """Ensure output filenames are sanitized and routed safely."""
+        res = resolve_output_file("my_video.mp4")
+        self.assertEqual(res, "data/runtime/work/my_video.mp4")
+
+        res_out = resolve_output_file("data/output/final_360.mp4")
+        self.assertEqual(res_out, "data/output/final_360.mp4")
+
+        # Traversal attempt in output
+        res_trav = resolve_output_file("../../Windows/cmd.mp4")
+        self.assertEqual(res_trav, "data/runtime/work/cmd.mp4")
+
+        # Disallow dash prefix or null bytes
+        self.assertEqual(resolve_output_file("-bad.mp4"), "")
+        self.assertEqual(resolve_output_file("bad\0name.mp4"), "")
+
+    def test_get_status_and_log_paths(self):
+        """Ensure status and log file paths stay strictly within runtime dirs."""
+        sf = get_status_file_path("test_123")
+        self.assertEqual(sf, "data/runtime/temp/status_test_123.json")
+
+        lf = get_log_file_path("test_123")
+        self.assertEqual(lf, "data/runtime/logs/pipeline_test_123.log")
+
+        # Traversal attempt in job_id
+        sf_trav = get_status_file_path("../../etc/passwd")
+        self.assertEqual(sf_trav, "data/runtime/temp/status_etcpasswd.json")
+
+    def test_media_file_validators_reject_traversal(self):
+        """Ensure is_valid_video_file rejects invalid paths and traversal attempts."""
+        self.assertFalse(is_valid_video_file("../../Windows/System32/notepad.exe"))
+        self.assertFalse(is_valid_video_file("/etc/shadow"))
+        self.assertFalse(is_valid_video_file("-flag"))
+        self.assertFalse(is_valid_video_file(""))
+        self.assertFalse(is_valid_image_file("../../boot.ini"))
+        self.assertFalse(is_valid_image_file(""))
 
 
 if __name__ == "__main__":

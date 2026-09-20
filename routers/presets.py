@@ -75,11 +75,14 @@ async def api_load_preset(filename: str):
     """
     user_presets_dir, _ = _presets_dirs()
     safe_name = sanitize_preset_filename(filename)
-    target_path = user_presets_dir / safe_name
-    if not target_path.exists():
+    base_presets_abs = os.path.realpath(os.path.abspath(str(user_presets_dir)))
+    target_abs = os.path.realpath(os.path.abspath(os.path.join(base_presets_abs, safe_name)))
+    if not target_abs.startswith(base_presets_abs + os.sep) and target_abs != base_presets_abs:
+        return JSONResponse({"success": False, "error": f"Invalid preset filename: {safe_name}"}, status_code=400)
+    if not os.path.exists(target_abs) or not os.path.isfile(target_abs):
         return JSONResponse({"success": False, "error": f"File not found: {safe_name}"}, status_code=404)
     try:
-        with open(target_path, "r", encoding="utf-8") as f:
+        with open(target_abs, "r", encoding="utf-8") as f:
             data = json.load(f)
         return JSONResponse({"success": True, "filename": safe_name, "data": data})
     except Exception as e:
@@ -127,14 +130,17 @@ async def api_save_preset(request: Request):
         return JSONResponse({"success": False, "error": "No configuration data provided"}, status_code=400)
 
     safe_name = sanitize_preset_filename(filename)
-    target_path = user_presets_dir / safe_name
+    base_presets_abs = os.path.realpath(os.path.abspath(str(user_presets_dir)))
+    target_abs = os.path.realpath(os.path.abspath(os.path.join(base_presets_abs, safe_name)))
+    if not target_abs.startswith(base_presets_abs + os.sep) and target_abs != base_presets_abs:
+        return JSONResponse({"success": False, "error": "Invalid preset filename"}, status_code=400)
 
     if isinstance(config_data, dict):
         config_data["type"] = "pipeline_config"
         config_data["saved_at"] = datetime.now().isoformat()
 
     json_str = json.dumps(config_data, indent=2, ensure_ascii=False) + "\n"
-    with open(target_path, "w", newline="\n", encoding="utf-8") as f:
+    with open(target_abs, "w", newline="\n", encoding="utf-8") as f:
         f.write(json_str)
 
     return JSONResponse({"success": True, "filename": safe_name, "message": f"Saved {safe_name} successfully"}, status_code=201)

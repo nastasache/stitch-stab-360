@@ -83,3 +83,7 @@ Hardened subprocess invocations in streetview_gpx.py and routers/streetview.py b
 
 ## [2026-09-20] DRY Command-Line Injection Hardening & Centralized Process Spawner (Alerts #142 & #143)
 Centralized subprocess.Popen and async process spawning into spawn_background_process and run_async_subprocess in routers/common.py with automatic platform flags (CREATE_NEW_PROCESS_GROUP/CREATE_NO_WINDOW on Windows, start_new_session on POSIX). Added centralized safe_choice allowlists and safe_number type coercion to eliminate command-line injection vectors across routers.
+
+
+## [2026-09-20] CodeQL Path Injection Canonical Barrier Architecture
+Implemented centralized canonical boundary containment in routers/common.py using os.path.realpath, os.path.abspath, and prefix startswith checks. Resolved CodeQL py/path-injection, py/command-line-injection, and py/xml-bomb across common.py, jobs.py, videos.py, streetview.py, presets.py, and scripts/streetview_gpx.py.
