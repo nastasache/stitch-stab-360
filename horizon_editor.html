@@ -1872,10 +1872,23 @@
       cleanPath = cleanPath.replace(/^\/+/, '');
       const segments = cleanPath.split('/').map(seg => seg.replace(/[^a-zA-Z0-9_\-\.]/g, '_').replace(/^[\.\-]+/, '')).filter(Boolean);
       if (segments.length === 0) return '';
-      const safeRelPath = segments.join('/');
-      const finalPath = (safeRelPath.startsWith('data/') || safeRelPath.startsWith('samples/'))
-        ? `/${safeRelPath}`
-        : `/data/input/videos/${safeRelPath}`;
+      const rawRel = segments.join('/');
+      let safeRelPath = '';
+      for (let i = 0; i < rawRel.length; i++) {
+        const c = rawRel.charCodeAt(i);
+        if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 45 || c === 46 || c === 47 || c === 95) {
+          safeRelPath += String.fromCharCode(c);
+        }
+      }
+      if (!safeRelPath) return '';
+      let finalPath = '';
+      if (safeRelPath.startsWith('samples/')) {
+        finalPath = '/samples/' + safeRelPath.slice(8);
+      } else if (safeRelPath.startsWith('data/')) {
+        finalPath = '/data/' + safeRelPath.slice(5);
+      } else {
+        finalPath = '/data/input/videos/' + safeRelPath;
+      }
       return encodeURI(finalPath);
     }
 
@@ -1939,8 +1952,10 @@
         hudStatus.textContent = 'Error loading video';
       }, { once: true });
 
-      video.src = safeSrc;
-      video.load();
+      if (safeSrc.startsWith('/data/') || safeSrc.startsWith('/samples/') || safeSrc.startsWith('blob:')) {
+        video.src = safeSrc;
+        video.load();
+      }
 
       if (video.readyState >= 1 && video.videoWidth > 0) {
         handleMetadataLoaded();

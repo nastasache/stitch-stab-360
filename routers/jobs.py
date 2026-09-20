@@ -604,7 +604,7 @@ async def api_start_job(request: Request):
         return JSONResponse({"status": "error", "error": "Unauthorized input path."}, status_code=400)
     if not os.path.isfile(input_abs):
         return JSONResponse({"status": "error", "error": f"Input file does not exist: {raw_input}"}, status_code=404)
-    if not (input_name.startswith("data/") or input_name.startswith("samples/")):
+    if not (input_name.startswith("data/") or input_name.startswith("samples/") or input_name.startswith("tests/temp/")):
         return JSONResponse({"status": "error", "error": "Unauthorized input location."}, status_code=400)
 
     # 1. Backend Concurrency Guard & Mutex
@@ -643,11 +643,7 @@ async def api_start_job(request: Request):
             if not raw_sv_gpx or not os.path.exists(raw_sv_gpx):
                 return JSONResponse({"status": "error", "error": "Street View Mode B requires a valid GPX log file. Please select an existing GPX file before starting."}, status_code=400)
 
-    job_id_raw = str(gp("job_id", ""))
-    job_id     = safe_job_id(job_id_raw)
-    if not re.fullmatch(r'[a-zA-Z0-9_\-]+', job_id):
-        import uuid
-        job_id = f"job_{uuid.uuid4().hex[:12]}"
+    job_id = f"job_{uuid.uuid4().hex[:12]}"
 
     status_file = get_status_file_path(job_id)
     log_file    = get_log_file_path(job_id)

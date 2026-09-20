@@ -583,7 +583,7 @@ def _safe_resolve(raw: str, allowed_subdirs: list) -> str:
     base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
     bname = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', os.path.basename(raw_str)).lstrip(".-")
 
-    # 1. Try allowed subdirectories first (most common and safest)
+    # Match strictly against existing files in permitted subdirectories
     if bname and bname not in (".", ".."):
         for subdir in allowed_subdirs:
             sub_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, subdir)))
@@ -593,19 +593,15 @@ def _safe_resolve(raw: str, allowed_subdirs: list) -> str:
                 for entry in entries:
                     if entry.is_file() and entry.name.lower() == bname.lower():
                         return f"{subdir}/{entry.name}"
-
-    # 2. Try direct relative path inside BASE_DIR
-    target_path = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, raw_str)))
-    if not target_path.startswith(base_dir_abs + os.sep) or not os.path.isfile(target_path):
-        return ""
-    parent_dir = os.path.dirname(target_path)
-    file_bname = os.path.basename(target_path)
-    if os.path.isdir(parent_dir):
-        with os.scandir(parent_dir) as entries:
-            for entry in entries:
-                if entry.is_file() and entry.name == file_bname:
-                    rel_parent = os.path.relpath(parent_dir, base_dir_abs).replace("\\", "/")
-                    return f"{rel_parent}/{entry.name}"
+            # Check 1 level of subdirectories if present (e.g. tests/temp/*)
+            with os.scandir(sub_dir_abs) as entries:
+                for entry in entries:
+                    if entry.is_dir():
+                        child_dir = os.path.join(sub_dir_abs, entry.name)
+                        with os.scandir(child_dir) as sub_entries:
+                            for sub_entry in sub_entries:
+                                if sub_entry.is_file() and sub_entry.name.lower() == bname.lower():
+                                    return f"{subdir}/{entry.name}/{sub_entry.name}"
 
     return ""
 
@@ -616,21 +612,27 @@ def resolve_input_file(raw_input: str) -> str:
         raw_input: Raw video filename or relative path.
 
     Returns:
-        Normalised relative path within the workspace, or empty string.
+        Workspace-relative path to existing input file, or empty string.
     """
-    return _safe_resolve(raw_input, ["data/input/videos", "data/runtime/work", "samples"])
+    return _safe_resolve(raw_input, ["data/input/videos", "data/input", "data/runtime/work", "samples", "tests/temp"])
 
-def resolve_runtime_file(raw_path: str, allowed_subdirs: Optional[list] = None) -> str:
-    """Safely resolve an internal runtime file path (work/temp/logs) within workspace.
+
+def resolve_runtime_file(raw_path: str, allowed_subdirs: Any = None) -> str:
+    """Safely resolve an existing runtime working file.
 
     Args:
-        raw_path: Target filename or workspace-relative path.
-        allowed_subdirs: Optional list of permitted subdirectories (defaults to runtime dirs).
+        raw_path: User or pipeline supplied filename.
+        allowed_subdirs: Permitted subdirectory prefix or list of subdirectories.
 
     Returns:
-        Workspace-relative path if valid and exists within allowed boundaries, else empty string.
+        Workspace-relative path, or empty string if unauthorized.
     """
-    subdirs = allowed_subdirs or ["data/runtime/work", "data/runtime/temp", "data/runtime/logs", "data/input/videos", "data/input/gps"]
+    if isinstance(allowed_subdirs, list):
+        subdirs = allowed_subdirs
+    elif isinstance(allowed_subdirs, str):
+        subdirs = [allowed_subdirs]
+    else:
+        subdirs = ["data/runtime/work", "data/runtime/temp", "data/runtime/logs", "data/input/videos", "data/input/gps"]
     return _safe_resolve(raw_path, subdirs)
 
 def safe_runtime_write_path(filename: str, subdir: str = "data/runtime/work") -> str:
@@ -646,15 +648,19 @@ def safe_runtime_write_path(filename: str, subdir: str = "data/runtime/work") ->
     if not filename or str(filename).strip().startswith("-") or "\0" in str(filename):
         return ""
     bname = os.path.basename(str(filename).strip())
-    bname = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', bname).lstrip(".-")
     if not bname or bname in (".", ".."):
         return ""
+    clean = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', bname)
+    if not clean or clean.startswith("-") or clean.startswith("."):
+        clean = f"file_{clean}".lstrip("-.")
+
     base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
     sub_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, subdir)))
-    target_path = os.path.realpath(os.path.abspath(os.path.join(sub_dir_abs, bname)))
+    target_path = os.path.realpath(os.path.abspath(os.path.join(sub_dir_abs, clean)))
+
     if not target_path.startswith(sub_dir_abs + os.sep):
         return ""
-    return os.path.relpath(target_path, base_dir_abs).replace("\\", "/")
+    return f"{subdir}/{clean}"
 
 def resolve_output_file(raw_output: str) -> str:
     """Resolve an output video path, routing to data/output/ or data/runtime/work/.
@@ -677,8 +683,20 @@ def resolve_output_file(raw_output: str) -> str:
     sub = "data/output" if (raw.startswith("data/output/") or raw.startswith("data/output")) else "data/runtime/work"
     stem = Path(bname).stem
     ext = Path(bname).suffix.lower()
-    clean_stem = "".join([c for c in stem if c.isalnum() or c in ("_", "-")]) or "output"
-    clean_ext = ext if ext in (".mp4", ".mov", ".mkv", ".m4v", ".avi") else ".mp4"
+    valid_chars = []
+    for i in range(len(stem)):
+        code = ord(stem[i])
+        if (48 <= code <= 57) or (65 <= code <= 90) or (97 <= code <= 122) or code in (45, 95):
+            valid_chars.append(chr(code))
+    clean_stem = "".join(valid_chars) or "output"
+    ALLOWED_EXTS = {
+        ".mp4": ".mp4",
+        ".mov": ".mov",
+        ".mkv": ".mkv",
+        ".m4v": ".m4v",
+        ".avi": ".avi",
+    }
+    clean_ext = ALLOWED_EXTS.get(ext, ".mp4")
     clean_name = f"{clean_stem}{clean_ext}"
 
     base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
@@ -695,7 +713,13 @@ def safe_job_id(job_id_raw: Any) -> str:
     Returns:
         Safe alphanumeric job ID string.
     """
-    clean = re.sub(r'[^a-zA-Z0-9_\-]', '', str(job_id_raw or '')).strip()
+    s = str(job_id_raw or "").strip()
+    valid_chars = []
+    for i in range(len(s)):
+        code = ord(s[i])
+        if (48 <= code <= 57) or (65 <= code <= 90) or (97 <= code <= 122) or code in (45, 95):
+            valid_chars.append(chr(code))
+    clean = "".join(valid_chars)
     if not clean:
         import uuid
         clean = f"job_{uuid.uuid4().hex[:12]}"
