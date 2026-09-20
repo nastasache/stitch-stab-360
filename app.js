@@ -5459,15 +5459,7 @@ function formatTimeHHMMSS(val) {
 function resolveVideoSrc(path) {
     if (!path || typeof path !== 'string') return '';
     let p = path.trim().replace(/\\/g, '/');
-    if (/^(javascript|data|vbscript):/i.test(p)) return '';
-    if (p.startsWith('blob:')) {
-        try {
-            const u = new URL(p);
-            if (u.origin === window.location.origin) return p;
-        } catch (e) {
-            return '';
-        }
-    }
+    if (/^(javascript|data|vbscript|blob):/i.test(p)) return '';
     if (p.includes('://')) {
         try {
             const u = new URL(p, window.location.origin);
@@ -5479,11 +5471,13 @@ function resolveVideoSrc(path) {
         }
     }
     p = p.replace(/^\/+/, '');
-    if (p.startsWith('data/') || p.startsWith('samples/')) {
-        return p;
-    }
-    const cleanName = p.replace(/[^a-zA-Z0-9_\-\.]/g, '_').replace(/^[\.\-]+/, '');
-    return cleanName ? `data/input/videos/${cleanName}` : '';
+    const segments = p.split('/').map(seg => seg.replace(/[^a-zA-Z0-9_\-\.]/g, '_').replace(/^[\.\-]+/, '')).filter(Boolean);
+    if (segments.length === 0) return '';
+    const safeRelPath = segments.join('/');
+    const finalPath = (safeRelPath.startsWith('data/') || safeRelPath.startsWith('samples/'))
+        ? safeRelPath
+        : `data/input/videos/${safeRelPath}`;
+    return encodeURI(finalPath);
 }
 
 async function loadVideoMetadata() {

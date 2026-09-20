@@ -37,6 +37,9 @@ from routers.common import (
     spawn_background_process,
     safe_number,
     safe_choice,
+    safe_coord,
+    safe_iso_timestamp,
+    safe_bitrate,
     sanitize_cmd_arg,
     _managed_pids,
     save_managed_pids,
@@ -659,8 +662,7 @@ async def api_start_job(request: Request):
 
     output_name = resolve_output_file(raw_output)
     if not output_name:
-        clean_out_base = re.sub(r'[^a-zA-Z0-9_\-]', '_', Path(os.path.basename(raw_output)).stem) or "output"
-        output_name = f"data/runtime/work/{clean_out_base}.mp4"
+        return JSONResponse({"status": "error", "error": "Invalid output filename or path."}, status_code=400)
 
     output_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, output_name)))
     if not output_abs.startswith(base_dir_abs + os.sep):
@@ -879,19 +881,19 @@ async def api_start_job(request: Request):
             sv_gpx_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, raw_sv_gpx)))
             if sv_gpx_abs.startswith(base_dir_abs + os.sep) and os.path.isfile(sv_gpx_abs):
                 pipeline_cmd.extend(["--streetview_gpx_path", raw_sv_gpx])
-        sv_st = re.sub(r'[^a-zA-Z0-9:\.\-+_]', '', str(gp("streetview_start_time", "")).strip())
-        if sv_st and re.fullmatch(r'[a-zA-Z0-9:\.\-+_]+', sv_st):
+        sv_st = safe_iso_timestamp(gp("streetview_start_time", ""))
+        if sv_st:
             pipeline_cmd.extend(["--streetview_start_time", sv_st])
         pipeline_cmd.extend(["--streetview_time_offset", safe_number(gp("streetview_time_offset"), "0")])
         if str(gp("streetview_auto_pad", "1")) == "0": pipeline_cmd.append("--streetview_no_auto_pad")
-        sv_bitrate = re.sub(r'[^0-9a-zA-Z]', '', str(gp("streetview_bitrate", PIPELINE_DEFAULTS["streetview_bitrate"])).strip())
-        if sv_bitrate and re.fullmatch(r'[0-9]+[a-zA-Z]?', sv_bitrate):
+        sv_bitrate = safe_bitrate(gp("streetview_bitrate", PIPELINE_DEFAULTS["streetview_bitrate"]))
+        if sv_bitrate:
             pipeline_cmd.extend(["--streetview_bitrate", sv_bitrate])
-        sv_start_coord = re.sub(r'[^0-9\.,\- ]', '', str(gp("streetview_start_coord", "")).strip())
-        if sv_start_coord and re.fullmatch(r'[-+]?[0-9]*\.?[0-9]+,\s*[-+]?[0-9]*\.?[0-9]+', sv_start_coord):
+        sv_start_coord = safe_coord(gp("streetview_start_coord", ""))
+        if sv_start_coord:
             pipeline_cmd.extend(["--streetview_start_coord", sv_start_coord])
-        sv_end_coord = re.sub(r'[^0-9\.,\- ]', '', str(gp("streetview_end_coord", "")).strip())
-        if sv_end_coord and re.fullmatch(r'[-+]?[0-9]*\.?[0-9]+,\s*[-+]?[0-9]*\.?[0-9]+', sv_end_coord):
+        sv_end_coord = safe_coord(gp("streetview_end_coord", ""))
+        if sv_end_coord:
             pipeline_cmd.extend(["--streetview_end_coord", sv_end_coord])
         if str(gp("streetview_smooth_gps", "1")) == "1": pipeline_cmd.append("--streetview_smooth_gps")
         if str(gp("streetview_strip_audio", "1")) == "0":
@@ -899,8 +901,8 @@ async def api_start_job(request: Request):
         else:
             pipeline_cmd.append("--streetview_strip_audio")
 
-    video_bitrate = re.sub(r'[^0-9a-zA-Z]', '', str(gp("video_bitrate", "")).strip())
-    if video_bitrate and re.fullmatch(r'[0-9]+[a-zA-Z]?', video_bitrate):
+    video_bitrate = safe_bitrate(gp("video_bitrate", ""), default="")
+    if video_bitrate:
         pipeline_cmd.extend(["--video_bitrate", video_bitrate])
     if str(gp("remove_audio", "0")) == "1": pipeline_cmd.append("--remove_audio")
     if str(gp("prompt_transforms", "1")) == "0": pipeline_cmd.append("--no_prompt_transforms")

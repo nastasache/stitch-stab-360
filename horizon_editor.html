@@ -1847,19 +1847,36 @@
       if (s.startsWith('blob:')) {
         try {
           const u = new URL(s);
-          if (u.origin === window.location.origin) return s;
+          if (u.protocol === 'blob:' && (u.origin === window.location.origin || u.origin === 'null')) {
+            const rawUuid = u.pathname.replace(/^[\/\\]+/, '').replace(/[^a-zA-Z0-9_\-]/g, '');
+            if (rawUuid) {
+              return encodeURI(`blob:${window.location.origin}/${rawUuid}`);
+            }
+          }
+        } catch (e) {
+          return '';
+        }
+        return '';
+      }
+      let cleanPath = s.replace(/\\/g, '/');
+      if (cleanPath.includes('://')) {
+        try {
+          const u = new URL(cleanPath, window.location.origin);
+          if (u.origin !== window.location.origin) return '';
+          if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+          cleanPath = u.pathname;
         } catch (e) {
           return '';
         }
       }
-      try {
-        const u = new URL(s, window.location.origin);
-        if (u.origin !== window.location.origin) return '';
-        if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
-        return u.pathname + u.search;
-      } catch (e) {
-        return '';
-      }
+      cleanPath = cleanPath.replace(/^\/+/, '');
+      const segments = cleanPath.split('/').map(seg => seg.replace(/[^a-zA-Z0-9_\-\.]/g, '_').replace(/^[\.\-]+/, '')).filter(Boolean);
+      if (segments.length === 0) return '';
+      const safeRelPath = segments.join('/');
+      const finalPath = (safeRelPath.startsWith('data/') || safeRelPath.startsWith('samples/'))
+        ? safeRelPath
+        : `data/input/videos/${safeRelPath}`;
+      return encodeURI(finalPath);
     }
 
     function loadVideo(src, fileObj = null) {

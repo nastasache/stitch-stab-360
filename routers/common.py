@@ -13,6 +13,7 @@ import shutil
 import asyncio
 import subprocess
 import signal
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 import psutil
@@ -367,6 +368,60 @@ def safe_choice(val: Any, allowed: Any, default: str) -> str:
         if s == str(opt):
             return str(opt)
     return str(default)
+
+
+def safe_coord(val: Any) -> str:
+    """Validate coordinate string 'lat,lon' with float bounds checking without ReDoS."""
+    if not val:
+        return ""
+    parts = str(val).strip().split(",")
+    if len(parts) != 2:
+        return ""
+    try:
+        lat = float(parts[0].strip())
+        lon = float(parts[1].strip())
+        if -90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0:
+            return f"{lat:.6f},{lon:.6f}"
+    except (ValueError, TypeError):
+        pass
+    return ""
+
+
+def safe_iso_timestamp(val: Any) -> str:
+    """Validate ISO timestamp string or epoch timestamp, returning normalized ISO string."""
+    if not val:
+        return ""
+    s = str(val).strip()
+    clean_s = s.replace("Z", "").replace(" ", "T")
+    try:
+        dt = datetime.fromisoformat(clean_s)
+        return dt.isoformat()
+    except (ValueError, TypeError):
+        pass
+    try:
+        ts = float(s)
+        return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
+    except (ValueError, TypeError, OverflowError):
+        pass
+    return ""
+
+
+def safe_bitrate(val: Any, default: str = "") -> str:
+    """Validate and normalize bitrate strings like '15M', '50000k'."""
+    if not val:
+        return str(default)
+    s = str(val).strip().upper()
+    digits = "".join([c for c in s if c.isdigit()])
+    if not digits:
+        return str(default)
+    unit = ""
+    if s.endswith("M"):
+        unit = "M"
+    elif s.endswith("K"):
+        unit = "K"
+    elif s.endswith("G"):
+        unit = "G"
+    return f"{int(digits)}{unit}"
 
 
 def spawn_background_process(

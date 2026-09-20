@@ -95,3 +95,7 @@ CodeQL Python PathInjection and CommandInjection dataflow analyzers require pure
 
 ## [2026-09-20] Runtime File Resolution and CLI Param Hardening
 Introduced resolve_runtime_file and safe_runtime_write_path in routers/common.py with single-condition startswith barriers. Sanitized all remaining form parameters in routers/jobs.py and eliminated NVENC exception leakage in utils/tool_resolver.py.
+
+
+## [2026-09-20] CodeQL Alert Remediation Final 8: ReDoS, Command Injection, and DOM URL Sinks
+Remediated final 8 Code Scanning alerts across Python and JavaScript: replaced nested-quantifier coordinate regex with safe_coord bounds-checked float parser eliminating polynomial ReDoS (py/polynomial-redos); sanitized ISO timestamps and bitrates via safe_iso_timestamp and safe_bitrate while removing raw fallback in output resolution to eliminate CLI injection taint (py/command-line-injection); hardened resolveVideoSrc and sanitizeMediaUrl with segment sanitization, origin-bound blob URL reconstruction, and encodeURI wrapping (js/xss-through-dom, js/client-side-unvalidated-url-redirection).
