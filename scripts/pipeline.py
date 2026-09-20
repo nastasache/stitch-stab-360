@@ -2625,7 +2625,7 @@ def main():
     parser.add_argument("--telemetry_mode", default=PIPELINE_DEFAULTS["telemetry_mode"], choices=["smooth", "level", "lock", "zero"], help="Telemetry stabilization mode")
     parser.add_argument("--telemetry_fusion", default=str(PIPELINE_DEFAULTS.get("telemetry_fusion", "mahony")), choices=["none", "mahony", "complementary", "ekf"], help="Optional 6-axis IMU sensor fusion filter")
     parser.add_argument("--telemetry_fusion_gain", type=float, default=float(PIPELINE_DEFAULTS.get("telemetry_fusion_gain", 0.51)), help="Filter gain / alpha parameter for 6-axis IMU fusion")
-    parser.add_argument("--telemetry_smoothing", type=int, default=PIPELINE_DEFAULTS["telemetry_smoothing"], help="Telemetry moving average window size (frames)")
+    parser.add_argument("--telemetry_smoothing", type=float, default=float(PIPELINE_DEFAULTS["telemetry_smoothing"]), help="Telemetry moving average window size (frames)")
     parser.add_argument("--telemetry_ref_frame", type=int, default=PIPELINE_DEFAULTS["telemetry_ref_frame"], help="Reference frame index for Horizon Lock")
     parser.add_argument("--telemetry_source", default=PIPELINE_DEFAULTS["telemetry_source"], choices=["auto", "samsung", "gopro", "camm", "insta360", "gyroflow", "witmotion", "custom_csv"], help="Universal telemetry source format")
     parser.add_argument("--telemetry_extractor", default="extract_telemetry", choices=["extract_telemetry", "parse_gear360"], help="Post-stitch telemetry extractor engine")
