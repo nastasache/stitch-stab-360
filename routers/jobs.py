@@ -909,7 +909,7 @@ async def api_start_job(request: Request):
     if str(gp("fallback_unstabilized", "1")) == "0": pipeline_cmd.append("--no_fallback_unstabilized")
     if job_id: pipeline_cmd.extend(["--job_id", job_id])
 
-    duration = int(float(gp("duration", "0")))
+    duration = float(gp("duration", "0"))
     if duration > 0: pipeline_cmd.extend(["--duration", str(duration)])
 
     cmd_text = subprocess.list2cmdline(pipeline_cmd)
@@ -1279,7 +1279,7 @@ async def api_detect_checkpoints(request: Request):
     lock_roll        = str(gp("lock_roll", "0")).lower() in ["1", "true", "yes"]
     optical_target   = str(gp("optical_target", "ground")).lower()
     roll_damping     = float(gp("roll_damping", "0.70"))
-    max_cps          = int(gp("max_checkpoints")) if gp("max_checkpoints") else None
+    max_cps          = int(float(gp("max_checkpoints"))) if gp("max_checkpoints") else None
 
     is_post_stabilized = any(k in clean_video for k in ['_telemetry', '_kopf', '_kabsch', '_vidstab', '_horizon', '_3_'])
 

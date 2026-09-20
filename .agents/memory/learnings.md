@@ -11,3 +11,7 @@ Permit semicolons in sanitize_cmd_arg when matching valid FFmpeg filtergraph syn
 
 ## [2026-09-20] Float Preservation in Telemetry Smoothing
 Configured --telemetry_smoothing as float in scripts/pipeline.py and routers/jobs.py. The underlying smooth_telemetry_angles filter uses Gaussian sigma = window_size / 4.0, which naturally operates with continuous floating-point precision. Decimal floats must not be truncated to ints where mathematical filters benefit from sub-frame precision.
+
+
+## [2026-09-20] CLI & API Type Hardening
+Configured --duration as float in pipeline.py and routers/jobs.py to prevent truncation of fractional durations. Added _parse_int to pipeline.py argument parser for discrete parameters (blend_width, frame indices, resolutions) to safely accept integer-equivalent float representations without raising ValueError. Enforced int(float(...)) across API form parsing in routers/videos.py, routers/jobs.py, and routers/streetview.py.

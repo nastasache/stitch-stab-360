@@ -273,8 +273,8 @@ async def api_crop_video(request: Request):
     if os.path.abspath(target_output) == os.path.abspath(input_name):
         return JSONResponse({"status": "error", "error": "Output filename cannot overwrite source video."}, status_code=400)
 
-    start_frame = int(form_data.get("start_frame", "0"))
-    end_frame   = int(form_data.get("end_frame", "-1"))
+    start_frame = int(float(form_data.get("start_frame", "0") or 0))
+    end_frame   = int(float(form_data.get("end_frame", "-1") or -1))
 
     cmd = [sys.executable, "-B", "scripts/crop_camera_video.py", "--input", input_name, "--output", target_output, "--start_frame", str(start_frame), "--end_frame", str(end_frame)]
     cmd_text = subprocess.list2cmdline(cmd)
@@ -413,7 +413,7 @@ async def _calibrate_handler(request: Request, mode: str):
 
     calib_mode  = str(gp("calib_mode", gp("auto_calibrate_mode", "balanced")))
     if calib_mode not in ["foreground", "balanced", "infinity"]: calib_mode = "balanced"
-    num_frames  = max(1, min(200, int(gp("num_frames", gp("auto_calibrate_frames", "5")))))
+    num_frames  = max(1, min(200, int(float(gp("num_frames", gp("auto_calibrate_frames", "5"))))))
     ih_fov      = float(gp("ih_fov", "190.00"))
     left_y      = float(gp("left_y_offset", "0.00"))
     rear_roll   = float(gp("rear_roll_offset", "0.00"))

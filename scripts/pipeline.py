@@ -2588,6 +2588,12 @@ def main():
     runs the stitching filters and post-stitching stabilization stages,
     injects 360 VR spatial metadata, and outputs metrics reports.
     """
+    def _parse_int(v):
+        try:
+            return int(v)
+        except (ValueError, TypeError):
+            return int(float(v))
+
     global _GLOBAL_ARGS, shutil
     parser = argparse.ArgumentParser(description="360 Video Stitching & Stabilization Pipeline")
     parser.add_argument("--input",        required=True,              help="Input raw dual fisheye video")
@@ -2604,10 +2610,10 @@ def main():
     parser.add_argument("--crf", "--ffmpeg_crf", dest="crf", type=str, default=str(PIPELINE_DEFAULTS["ffmpeg_crf"]), help="CRF quality value (18 = high quality)")
     parser.add_argument("--hwaccel", "--ffmpeg_hwaccel", dest="hwaccel", action="store_true", help="Use NVENC hardware acceleration")
     parser.add_argument("--blend_seams",  action="store_true",        help="Alpha-blend the two lenses at the seam lines (±90°)")
-    parser.add_argument("--blend_width",  type=int, default=PIPELINE_DEFAULTS["blend_width"], help="Width of the blend region in pixels")
+    parser.add_argument("--blend_width",  type=_parse_int, default=PIPELINE_DEFAULTS["blend_width"], help="Width of the blend region in pixels")
     parser.add_argument("--anti_vignette",action="store_true",        help="Apply edge brightening anti-vignette filter")
     parser.add_argument("--anti_vignette_angle", default=str(PIPELINE_DEFAULTS["anti_vignette_angle"]), help="Strength/angle of the anti-vignette filter (default 0.785)")
-    parser.add_argument("--duration",     type=int, default=0,        help="Limit output duration (seconds, 0=full)")
+    parser.add_argument("--duration",     type=float, default=0.0,    help="Limit output duration (seconds, 0=full)")
 
     parser.add_argument("--stabilize",    action="store_true",        help="Apply post-stitching stabilization")
     parser.add_argument("--stabilize_type", default="vidstab", choices=["telemetry", "vidstab", "hybrid", "kabsch", "kopf", "hybrid_kopf", "telemetry_kopf"], help="Post-stitching stabilization method")
@@ -2626,7 +2632,7 @@ def main():
     parser.add_argument("--telemetry_fusion", default=str(PIPELINE_DEFAULTS.get("telemetry_fusion", "mahony")), choices=["none", "mahony", "complementary", "ekf"], help="Optional 6-axis IMU sensor fusion filter")
     parser.add_argument("--telemetry_fusion_gain", type=float, default=float(PIPELINE_DEFAULTS.get("telemetry_fusion_gain", 0.51)), help="Filter gain / alpha parameter for 6-axis IMU fusion")
     parser.add_argument("--telemetry_smoothing", type=float, default=float(PIPELINE_DEFAULTS["telemetry_smoothing"]), help="Telemetry moving average window size (frames)")
-    parser.add_argument("--telemetry_ref_frame", type=int, default=PIPELINE_DEFAULTS["telemetry_ref_frame"], help="Reference frame index for Horizon Lock")
+    parser.add_argument("--telemetry_ref_frame", type=_parse_int, default=PIPELINE_DEFAULTS["telemetry_ref_frame"], help="Reference frame index for Horizon Lock")
     parser.add_argument("--telemetry_source", default=PIPELINE_DEFAULTS["telemetry_source"], choices=["auto", "samsung", "gopro", "camm", "insta360", "gyroflow", "witmotion", "custom_csv"], help="Universal telemetry source format")
     parser.add_argument("--telemetry_extractor", default="extract_telemetry", choices=["extract_telemetry", "parse_gear360"], help="Post-stitch telemetry extractor engine")
     parser.add_argument("--telemetry_multiplier", type=float, default=PIPELINE_DEFAULTS["telemetry_multiplier"], help="Multiplier for telemetry corrections")
@@ -2636,23 +2642,23 @@ def main():
     parser.add_argument("--telemetry_pass", default="two", choices=["single", "two"], help="Post-stitching telemetry pass mode")
     parser.add_argument("--l1_lambda_acc", type=float, default=20.0, help="L1-norm smoothing acceleration weight")
     parser.add_argument("--l1_lambda_vel", type=float, default=2.0, help="L1-norm smoothing velocity weight")
-    parser.add_argument("--cinematic_window", type=int, default=45, help="Cinematic smoothing window (frames)")
+    parser.add_argument("--cinematic_window", type=_parse_int, default=45, help="Cinematic smoothing window (frames)")
     parser.add_argument("--traveldir_mode", default="travel_direction", choices=["travel_direction", "target_lock", "damped_follow"], help="Travel-direction lock mode")
     parser.add_argument("--traveldir_target_yaw", type=float, default=0.0, help="Travel-direction lock target yaw (deg)")
     parser.add_argument("--traveldir_damping", type=float, default=0.90, help="Travel-direction lock damping factor")
     parser.add_argument("--traveldir_deadband", type=float, default=1.5, help="Travel-direction lock deadband threshold (deg)")
     parser.add_argument("--inject_intermediate_meta", action="store_true", help="Inject 360 metadata into intermediate files")
     parser.add_argument("--inject_final_meta", action="store_true", default=True, help="Inject 360 metadata into final output video")
-    parser.add_argument("--vidstab_smoothing", type=int, default=PIPELINE_DEFAULTS["vidstab_smoothing"])
-    parser.add_argument("--vidstab_shakiness", type=int, default=PIPELINE_DEFAULTS["vidstab_shakiness"])
-    parser.add_argument("--kabsch_smoothing",  type=int, default=PIPELINE_DEFAULTS["kabsch_smoothing"])
-    parser.add_argument("--vidstab_stepsize", type=int, default=PIPELINE_DEFAULTS["vidstab_stepsize"], help="Grid stepsize for 2D optical feature tracking (default: 32)")
+    parser.add_argument("--vidstab_smoothing", type=_parse_int, default=PIPELINE_DEFAULTS["vidstab_smoothing"])
+    parser.add_argument("--vidstab_shakiness", type=_parse_int, default=PIPELINE_DEFAULTS["vidstab_shakiness"])
+    parser.add_argument("--kabsch_smoothing",  type=_parse_int, default=PIPELINE_DEFAULTS["kabsch_smoothing"])
+    parser.add_argument("--vidstab_stepsize", type=_parse_int, default=PIPELINE_DEFAULTS["vidstab_stepsize"], help="Grid stepsize for 2D optical feature tracking (default: 32)")
     parser.add_argument("--vidstab_optalgo", default=PIPELINE_DEFAULTS["vidstab_optalgo"], choices=["gauss", "opt", "avg"])
     parser.add_argument("--vidstab_tripod", action="store_true")
     parser.add_argument("--vidstab_visual", action="store_true", help="Draw vidstab tracking points on video")
     parser.add_argument("--kopf_keyframe_sec", type=float, default=PIPELINE_DEFAULTS["kopf_keyframe_sec"], help="Kopf 3D-2D: max interval between key frames in seconds (default: 2.0)")
-    parser.add_argument("--kopf_cube_face",    type=int,   default=PIPELINE_DEFAULTS["kopf_cube_face"], help="Kopf 3D-2D: cube-map face resolution (default: 1024)")
-    parser.add_argument("--kopf_max_features", type=int,   default=PIPELINE_DEFAULTS["kopf_max_features"],  help="Kopf 3D-2D & Kabsch: max features to track (default: 400)")
+    parser.add_argument("--kopf_cube_face",    type=_parse_int,   default=PIPELINE_DEFAULTS["kopf_cube_face"], help="Kopf 3D-2D: cube-map face resolution (default: 1024)")
+    parser.add_argument("--kopf_max_features", type=_parse_int,   default=PIPELINE_DEFAULTS["kopf_max_features"],  help="Kopf 3D-2D & Kabsch: max features to track (default: 400)")
     parser.add_argument("--kopf_deformed",     action="store_true",      help="Kopf 3D-2D: enable deformed-rotation jitter model (Section 3.4)")
     parser.add_argument("--kopf_reapply",      action="store_true",      help="Kopf 3D-2D: reapply smoothed rotations (Section 4.1, non-VR mode)")
     parser.add_argument("--nadir_logo",   default="",                 help="Path to nadir logo PNG (RGBA). Default: logo_stei_circle.png")

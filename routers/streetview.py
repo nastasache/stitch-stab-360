@@ -393,7 +393,7 @@ async def api_trace_trajectory(request: Request):
             start_lon=float(gp("start_lon", "0.0")),
             initial_heading_deg=float(gp("initial_heading", "0.0")),
             walking_speed_mps=float(gp("walking_speed", "1.15")),
-            checkpoint_interval_sec=int(gp("checkpoint_interval", "10")),
+            checkpoint_interval_sec=int(float(gp("checkpoint_interval", "10"))),
             start_ele=float(gp("start_ele", "315.0"))
         )
         return JSONResponse({"status": "success", "checkpoints": res["checkpoints"], "total_distance_m": res["total_distance_m"], "net_displacement_m": res["net_displacement_m"], "duration_sec": res["duration_sec"], "points_count": res["points_count"]})
