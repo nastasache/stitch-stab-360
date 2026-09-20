@@ -10,6 +10,7 @@ preset configuration, video processing, stabilization, Street View export, and b
 
 import asyncio
 import traceback
+from datetime import datetime
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -203,6 +204,17 @@ async def global_exception_handler(request: Request, exc: Exception):
     err_msg = str(exc) or type(exc).__name__
     print(f"[ERROR] Global Server Exception on {request.method} {request.url}: {err_msg}")
     traceback.print_exc()
+    try:
+        os.makedirs("data/runtime/logs", exist_ok=True)
+        log_entry = (
+            f"[{datetime.now().isoformat()}] [ERROR] Global Server Exception on "
+            f"{request.method} {request.url}: {err_msg}\n"
+            f"{traceback.format_exc()}\n"
+        )
+        with open("data/runtime/logs/server_errors.log", "a", encoding="utf-8") as f_err:
+            f_err.write(log_entry)
+    except Exception:
+        pass
     return JSONResponse(
         status_code=500,
         content={"status": "error", "error": "An internal server error occurred."}

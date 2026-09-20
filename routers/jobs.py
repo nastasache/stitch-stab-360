@@ -255,12 +255,12 @@ async def api_check_intermediates(
     horizon_report_file = ""
     traveldir_report_file = ""
 
+    resolved_raw_input = ""
+    resolved_params = {}
+    resolved_config = None
+
     if target_base:
         out_ext = Path(output_name).suffix.lstrip(".") if output_name else "MP4"
-
-        resolved_raw_input = ""
-        resolved_params = {}
-        resolved_config = None
 
         cfg_file = f"data/runtime/work/{target_base}_config.json" if target_base else ""
         cfg_res = resolve_runtime_file(cfg_file, ["data/runtime/work"])
