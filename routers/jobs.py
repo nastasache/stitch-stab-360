@@ -604,6 +604,8 @@ async def api_start_job(request: Request):
         return JSONResponse({"status": "error", "error": "Unauthorized input path."}, status_code=400)
     if not os.path.isfile(input_abs):
         return JSONResponse({"status": "error", "error": f"Input file does not exist: {raw_input}"}, status_code=404)
+    if not (input_name.startswith("data/") or input_name.startswith("samples/")):
+        return JSONResponse({"status": "error", "error": "Unauthorized input location."}, status_code=400)
 
     # 1. Backend Concurrency Guard & Mutex
     active_job = get_active_job()
@@ -667,6 +669,8 @@ async def api_start_job(request: Request):
     output_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, output_name)))
     if not output_abs.startswith(base_dir_abs + os.sep):
         return JSONResponse({"status": "error", "error": "Unauthorized output path."}, status_code=400)
+    if not (output_name.startswith("data/runtime/work/") or output_name.startswith("data/output/")):
+        return JSONResponse({"status": "error", "error": "Unauthorized output location."}, status_code=400)
 
     blend_seams_val    = (str(gp("blend_seams", "1")) == "1" or str(gp("blend_seams", "")).lower() == "true")
     blend_width_raw    = int(float(gp("blend_width", "200")))
@@ -814,7 +818,7 @@ async def api_start_job(request: Request):
 
     if str(gp("nadir_enabled", "0")) == "1":
         nadir_logo_raw = resolve_nadir_logo(str(gp("nadir_logo", PIPELINE_DEFAULTS["nadir_logo_default"])))
-        if nadir_logo_raw and not nadir_logo_raw.startswith("-"):
+        if nadir_logo_raw and not nadir_logo_raw.startswith("-") and (nadir_logo_raw.startswith("data/") or nadir_logo_raw.startswith("nadir/")):
             nadir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, nadir_logo_raw)))
             if nadir_abs.startswith(base_dir_abs + os.sep) and os.path.isfile(nadir_abs):
                 pipeline_cmd.extend(["--nadir_logo", nadir_logo_raw])

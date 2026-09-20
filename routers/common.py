@@ -13,6 +13,7 @@ import shutil
 import asyncio
 import subprocess
 import signal
+import shlex
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -586,18 +587,25 @@ def _safe_resolve(raw: str, allowed_subdirs: list) -> str:
     if bname and bname not in (".", ".."):
         for subdir in allowed_subdirs:
             sub_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, subdir)))
-            candidate = os.path.realpath(os.path.abspath(os.path.join(sub_dir_abs, bname)))
-            if not candidate.startswith(sub_dir_abs + os.sep):
+            if not os.path.isdir(sub_dir_abs):
                 continue
-            if os.path.isfile(candidate):
-                return os.path.relpath(candidate, base_dir_abs).replace("\\", "/")
+            with os.scandir(sub_dir_abs) as entries:
+                for entry in entries:
+                    if entry.is_file() and entry.name.lower() == bname.lower():
+                        return f"{subdir}/{entry.name}"
 
     # 2. Try direct relative path inside BASE_DIR
     target_path = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, raw_str)))
-    if not target_path.startswith(base_dir_abs + os.sep):
+    if not target_path.startswith(base_dir_abs + os.sep) or not os.path.isfile(target_path):
         return ""
-    if os.path.isfile(target_path):
-        return os.path.relpath(target_path, base_dir_abs).replace("\\", "/")
+    parent_dir = os.path.dirname(target_path)
+    file_bname = os.path.basename(target_path)
+    if os.path.isdir(parent_dir):
+        with os.scandir(parent_dir) as entries:
+            for entry in entries:
+                if entry.is_file() and entry.name == file_bname:
+                    rel_parent = os.path.relpath(parent_dir, base_dir_abs).replace("\\", "/")
+                    return f"{rel_parent}/{entry.name}"
 
     return ""
 
@@ -666,16 +674,20 @@ def resolve_output_file(raw_output: str) -> str:
     if not bname or bname in (".", ".."):
         return ""
 
-    bname = re.sub(r'[^a-zA-Z0-9_\-\.]', '_', bname)
     sub = "data/output" if (raw.startswith("data/output/") or raw.startswith("data/output")) else "data/runtime/work"
+    stem = Path(bname).stem
+    ext = Path(bname).suffix.lower()
+    clean_stem = "".join([c for c in stem if c.isalnum() or c in ("_", "-")]) or "output"
+    clean_ext = ext if ext in (".mp4", ".mov", ".mkv", ".m4v", ".avi") else ".mp4"
+    clean_name = f"{clean_stem}{clean_ext}"
 
     base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
     sub_dir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, sub)))
-    target_path = os.path.realpath(os.path.abspath(os.path.join(sub_dir_abs, bname)))
+    target_path = os.path.realpath(os.path.abspath(os.path.join(sub_dir_abs, clean_name)))
 
     if not target_path.startswith(sub_dir_abs + os.sep):
         return ""
-    return os.path.relpath(target_path, base_dir_abs).replace("\\", "/")
+    return f"{sub}/{clean_name}"
 
 def safe_job_id(job_id_raw: Any) -> str:
     """Sanitize and validate a job identifier to prevent path injection.

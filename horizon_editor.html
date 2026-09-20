@@ -1874,8 +1874,8 @@
       if (segments.length === 0) return '';
       const safeRelPath = segments.join('/');
       const finalPath = (safeRelPath.startsWith('data/') || safeRelPath.startsWith('samples/'))
-        ? safeRelPath
-        : `data/input/videos/${safeRelPath}`;
+        ? `/${safeRelPath}`
+        : `/data/input/videos/${safeRelPath}`;
       return encodeURI(finalPath);
     }
 
@@ -1884,6 +1884,10 @@
       const safeSrc = sanitizeMediaUrl(src);
       if (!safeSrc) {
         hudStatus.textContent = 'Invalid video source URL';
+        return;
+      }
+      if (!safeSrc.startsWith('/data/') && !safeSrc.startsWith('/samples/') && !safeSrc.startsWith('blob:')) {
+        hudStatus.textContent = 'Unauthorized video source path';
         return;
       }
 
