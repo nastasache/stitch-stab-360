@@ -31,11 +31,6 @@ if not exist "venv\Scripts\python.exe" (
     echo [INFO] Installing dependencies from requirements.txt...
     venv\Scripts\python.exe -m pip install --upgrade pip
     venv\Scripts\python.exe -m pip install -r requirements.txt
-) else (
-    venv\Scripts\python.exe -c "import defusedxml" 2>nul || (
-        echo [INFO] Updating virtual environment packages from requirements.txt...
-        venv\Scripts\python.exe -m pip install -r requirements.txt
-    )
 )
 
 start http://127.0.0.1:8000
