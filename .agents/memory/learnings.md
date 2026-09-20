@@ -19,7 +19,3 @@ Configured --duration as float in pipeline.py and routers/jobs.py to prevent tru
 
 ## [2026-09-21] Preserve Query Parameters in Client-Side Media Sanitizers
 Updated resolveVideoSrc in app.js and sanitizeMediaUrl in horizon_editor.html to cleanly extract and validate safe query strings (?t=timestamp cachebusters) before splitting path segments. Previously, non-alphanumeric replacement converted ?t= into _t_, causing 404 Not Found on intermediate video playback.
-
-
-## [2026-09-21] Auto-Sync Virtual Environment Packages in start.bat
-Enhanced start.bat to proactively verify that defusedxml is importable in the virtual environment before launching uvicorn. If missing (e.g. from an older venv created before requirements update), start.bat automatically runs pip install -r requirements.txt to prevent ModuleNotFoundError on no-docker installations.
