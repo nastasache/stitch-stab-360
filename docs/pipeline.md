@@ -224,7 +224,7 @@ Multiple stabilization methods can be chained in any order via `--stabilize_meth
   * In Quality Modes 1 and 4, the nadir overlay is merged directly into the Single-Pass Master Render filter graph, completely avoiding additional re-encoding loss.
 
 ### 8. High-Fidelity Video Encoding & Lossless Audio Remuxing
-* **Hardware NVENC**: Uses `h264_nvenc` or `hevc_nvenc` with configurable bitrate (`--video_bitrate`) or high-quality presets.
+* **Hardware NVENC & Automatic Fallback**: Uses `h264_nvenc` or `hevc_nvenc` with configurable bitrate (`--video_bitrate`) or high-quality presets. Features a pre-flight hardware probe (`probe_nvenc()`) and runtime error interception that automatically switches to software CPU encoding (`libx264`) if NVENC drivers, CUDA libraries, or GPU passthrough are unavailable.
 * **Software CPU**: Uses `libx264` or `libx265` with configurable CRF (`--crf`, default 18) and preset (`--preset`).
 * **Audio Handling**: Preserves original multi-channel or ambisonic spatial audio losslessly via `-c:a copy`, or strips audio when requested (`--remove_audio`).
 

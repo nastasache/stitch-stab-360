@@ -1,4 +1,4 @@
-import { initSystemHealth } from './js/diagnostics.js';
+import { initSystemHealth, getSystemHealth } from './js/diagnostics.js';
 import { initCheckpointPickerModal } from './js/streetview_picker.js';
 
 async function safeFetchJson(url, options = {}) {
@@ -4751,7 +4751,39 @@ async function showProceedConfirmation() {
 
     const isHwaccel = (options?.ffmpeg_hwaccel && options.ffmpeg_hwaccel.checked) || false;
     const ffmpegPreset = (options?.ffmpeg_preset && options.ffmpeg_preset.value) || String(APP_CONFIG.pipeline_defaults.ffmpeg_preset);
-    const hwText = isHwaccel ? 'GPU (NVENC)' : `CPU (${ffmpegPreset})`;
+
+    let hwText = `CPU (${ffmpegPreset})`;
+    let hwColor = '#fb923c';
+    let hwWarningAmber = false;
+    let hwTitle = '';
+
+    if (isHwaccel) {
+        let health = null;
+        try {
+            if (typeof getSystemHealth === 'function') {
+                health = await getSystemHealth();
+            } else if (window.__systemHealthData) {
+                health = window.__systemHealthData;
+            }
+        } catch (_) {
+            health = window.__systemHealthData || null;
+        }
+
+        const nvencOperational = health?.ffmpeg?.nvenc_operational;
+        if (nvencOperational === false) {
+            hwText = 'GPU (NVENC) ⚠️ (CPU fallback)';
+            hwColor = '#fbbf24';
+            hwWarningAmber = true;
+            const reason = health?.ffmpeg?.nvenc_reason;
+            hwTitle = reason
+                ? `NVENC unavailable: ${reason}. Pipeline will automatically fall back to CPU (libx264).`
+                : 'NVENC hardware acceleration is unavailable on this system/container. Pipeline will automatically fall back to CPU (libx264).';
+        } else {
+            hwText = 'GPU (NVENC)';
+            hwColor = '#34d399';
+            hwTitle = 'NVIDIA NVENC hardware acceleration operational.';
+        }
+    }
     const est = estimatePipelineDuration();
 
     const outputDisplay = testIdExists
@@ -4823,16 +4855,40 @@ async function showProceedConfirmation() {
     }
 
     items.push(
-        { label: 'Acceleration', value: hwText, color: isHwaccel ? '#34d399' : '#fb923c' },
+        {
+            label: 'Acceleration',
+            value: hwText,
+            color: hwColor,
+            isWarningAmber: hwWarningAmber,
+            title: hwTitle
+        },
         { label: '⏱️ Estimated Duration', value: est.text, color: '#10b981', highlight: true }
     );
 
-    valuesContainer.innerHTML = items.map(item => `
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: ${item.highlight ? '0.45rem 0.5rem' : '0.35rem 0.5rem'}; border-radius: ${item.highlight ? '6px' : '4px'}; background: ${item.isWarning ? 'rgba(239, 68, 68, 0.12)' : (item.highlight ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255,255,255,0.03)')}; ${item.isWarning ? 'border: 1px solid rgba(239, 68, 68, 0.35);' : (item.highlight ? 'border: 1px solid rgba(16, 185, 129, 0.3); margin-top: 2px;' : '')}">
-            <span style="color: ${item.labelColor || (item.highlight ? '#6ee7b7' : '#a1a1aa')}; font-weight: ${item.highlight ? '600' : 'normal'}; flex-shrink: 0; margin-right: 8px;">${item.label}</span>
+    valuesContainer.innerHTML = items.map(item => {
+        let bg = 'rgba(255,255,255,0.03)';
+        let border = '';
+        if (item.isWarning) {
+            bg = 'rgba(239, 68, 68, 0.12)';
+            border = 'border: 1px solid rgba(239, 68, 68, 0.35);';
+        } else if (item.isWarningAmber) {
+            bg = 'rgba(245, 158, 11, 0.12)';
+            border = 'border: 1px solid rgba(245, 158, 11, 0.35);';
+        } else if (item.highlight) {
+            bg = 'rgba(16, 185, 129, 0.12)';
+            border = 'border: 1px solid rgba(16, 185, 129, 0.3); margin-top: 2px;';
+        }
+
+        const labelColor = item.labelColor || (item.isWarningAmber ? '#fbbf24' : (item.highlight ? '#6ee7b7' : '#a1a1aa'));
+        const labelWeight = (item.highlight || item.isWarningAmber) ? '600' : 'normal';
+
+        return `
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: ${item.highlight ? '0.45rem 0.5rem' : '0.35rem 0.5rem'}; border-radius: ${item.highlight ? '6px' : '4px'}; background: ${bg}; ${border}">
+            <span style="color: ${labelColor}; font-weight: ${labelWeight}; flex-shrink: 0; margin-right: 8px;">${item.label}</span>
             <span style="color: ${item.color}; font-weight: ${item.highlight ? '700' : '600'}; font-family: monospace; font-size: ${item.fontSize || (item.highlight ? '1.0rem' : '0.92rem')}; text-align: right; word-break: break-all;" title="${item.title || ''}">${item.value}</span>
         </div>
-    `).join('');
+        `;
+    }).join('');
 
     modal.style.display = 'flex';
 }

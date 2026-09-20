@@ -14,6 +14,7 @@ services:
       - ./data/output:/app/data/output
       - ./data/runtime:/app/data/runtime
       - ./config:/app/config
+      - ./scripts:/app/scripts
 
     environment:
       - PYTHONDONTWRITEBYTECODE=1

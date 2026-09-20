@@ -64,6 +64,78 @@ def _parse_ffmpeg_info(bin_path: Path) -> Optional[Dict[str, Any]]:
         return None
 
 
+_NVENC_PROBE_CACHE: Dict[str, Tuple[bool, str]] = {}
+
+
+def probe_nvenc(ffmpeg_bin: Optional[str] = None, force_refresh: bool = False) -> Tuple[bool, str]:
+    """Checks whether NVIDIA NVENC hardware encoding is functional.
+
+    Runs a minimal probe encode using h264_nvenc to verify that
+    the GPU, drivers, and runtime libraries (libcuda, libnvidia-encode)
+    are operational.
+
+    Returns:
+        Tuple[bool, str]: (is_operational, failure_reason)
+    """
+    bin_target = str(ffmpeg_bin) if ffmpeg_bin else "ffmpeg"
+    cache_key = bin_target
+    if not force_refresh and cache_key in _NVENC_PROBE_CACHE:
+        return _NVENC_PROBE_CACHE[cache_key]
+
+    probe_cmd = [
+        bin_target,
+        "-f", "lavfi",
+        "-i", "nullsrc=s=256x256:d=0.04",
+        "-c:v", "h264_nvenc",
+        "-f", "null",
+        "-"
+    ]
+    try:
+        proc = subprocess.run(
+            probe_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            timeout=3.0,
+            creationflags=WIN_NO_WINDOW
+        )
+        if proc.returncode == 0:
+            res = (True, "")
+            _NVENC_PROBE_CACHE[cache_key] = res
+            return res
+
+        stderr = proc.stderr or proc.stdout or ""
+        reason = "Unknown encoder error"
+        if "Cannot load libcuda" in stderr or "Cannot load nvcuda" in stderr:
+            reason = "CUDA driver library (libcuda / nvcuda) could not be loaded (no GPU passthrough or missing drivers in container)"
+        elif "Cannot load libnvidia-encode" in stderr:
+            reason = "NVENC library (libnvidia-encode.so.1) not available in current environment"
+        elif "No NVENC capable devices found" in stderr or "No capable devices found" in stderr:
+            reason = "No NVENC-capable NVIDIA GPU devices detected"
+        elif "minimum required Nvidia driver" in stderr:
+            reason = "Installed NVIDIA driver is older than the minimum version required by NVENC"
+        elif "Could not open encoder" in stderr:
+            reason = "Failed to initialize NVENC encoder hardware context"
+        else:
+            for line in stderr.splitlines():
+                line_clean = line.strip()
+                if line_clean and any(err_kw in line_clean.lower() for err_kw in ["error", "cannot", "failed", "not permitted"]):
+                    reason = line_clean
+                    break
+        res = (False, reason)
+        _NVENC_PROBE_CACHE[cache_key] = res
+        return res
+    except subprocess.TimeoutExpired:
+        res = (False, "NVENC hardware probe timed out")
+        _NVENC_PROBE_CACHE[cache_key] = res
+        return res
+    except Exception as e:
+        res = (False, str(e))
+        _NVENC_PROBE_CACHE[cache_key] = res
+        return res
+
+
 def resolve_ffmpeg() -> Dict[str, Any]:
     """Discover, validate, and select the optimal FFmpeg binary.
 
@@ -149,6 +221,9 @@ def resolve_ffmpeg() -> Dict[str, Any]:
             "path": None,
             "version": None,
             "libvidstab": False,
+            "nvenc": False,
+            "nvenc_operational": False,
+            "nvenc_reason": "FFmpeg not detected on system.",
             "status": "error",
             "message": "FFmpeg not detected on system.",
             "candidates_found": []
@@ -182,12 +257,18 @@ def resolve_ffmpeg() -> Dict[str, Any]:
     else:
         msg += " without libvidstab (optical flow stabilization disabled)"
 
+    nvenc_operational, nvenc_reason = (False, "FFmpeg binary does not support NVENC")
+    if best.get("nvenc", False):
+        nvenc_operational, nvenc_reason = probe_nvenc(best["path"])
+
     return {
         "available": True,
         "path": best["path"],
         "version": best["version"],
         "libvidstab": best["libvidstab"],
         "nvenc": best.get("nvenc", False),
+        "nvenc_operational": nvenc_operational,
+        "nvenc_reason": nvenc_reason,
         "status": status,
         "message": msg,
         "candidates_found": [

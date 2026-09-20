@@ -67,3 +67,7 @@ Removed extraneous debug console.log statements from js/horizon_modals.js, js/st
 
 ## [2026-09-19] Auto-Revert Degraded Stabilization Stages
 Added optional and configurable auto-revert mechanism across pipeline engine, routers/jobs.py, presets, and index.html/app.js. When a stage degrades motion or increases tremor, it reverts current_file to the previous stage output, drops the transform from master composition, and prevents downstream stages (Cinematic, Horizon, Traveldir) from inheriting cascade distortions.
+
+
+## [2026-09-20] NVENC Hardware Probe and Automatic CPU Fallback
+Centralized NVENC hardware probe in utils.tool_resolver testing h264_nvenc operational readiness across Docker and Windows hosts. Intercepts missing libcuda/nvcuda or driver mismatches early, gracefully switching to libx264 software encoding and warning in UI Proceed modal.

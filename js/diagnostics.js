@@ -5,26 +5,45 @@
 
 // ── System Health & Diagnostic Suite ─────────────────────────────────────────
 
+let _systemHealthData = null;
+let _healthPromise = null;
+
 async function fetchSystemHealth() {
     const healthDot = document.getElementById('health-dot');
     const healthLabel = document.getElementById('health-label');
     const healthBtn = document.getElementById('btn-health-check');
-    if (!healthDot || !healthLabel) return;
-
-    healthDot.style.background = '#94a3b8';
-    healthLabel.textContent = 'Checking...';
-
-    try {
-        const resp = await fetch('/api/v1/system/health');
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const data = await resp.json();
-        renderSystemHealthUI(data);
-    } catch (err) {
-        console.warn('Failed to fetch system health:', err);
-        healthDot.style.background = '#f87171';
-        healthLabel.textContent = 'Check Failed';
-        if (healthBtn) healthBtn.title = 'Failed to connect to backend health diagnostic.';
+    if (healthDot && healthLabel) {
+        healthDot.style.background = '#94a3b8';
+        healthLabel.textContent = 'Checking...';
     }
+
+    _healthPromise = (async () => {
+        try {
+            const resp = await fetch('/api/v1/system/health');
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            _systemHealthData = data;
+            window.__systemHealthData = data;
+            renderSystemHealthUI(data);
+            return data;
+        } catch (err) {
+            console.warn('Failed to fetch system health:', err);
+            if (healthDot && healthLabel) {
+                healthDot.style.background = '#f87171';
+                healthLabel.textContent = 'Check Failed';
+            }
+            if (healthBtn) healthBtn.title = 'Failed to connect to backend health diagnostic.';
+            return null;
+        }
+    })();
+
+    return _healthPromise;
+}
+
+async function getSystemHealth() {
+    if (_systemHealthData) return _systemHealthData;
+    if (_healthPromise) return await _healthPromise;
+    return await fetchSystemHealth();
 }
 
 function renderSystemHealthUI(data) {
@@ -173,8 +192,9 @@ function initSystemHealth() {
 }
 
 
-export { fetchSystemHealth, renderSystemHealthUI, initSystemHealth };
+export { fetchSystemHealth, renderSystemHealthUI, initSystemHealth, getSystemHealth };
 
 // Global window attachments for backward compatibility
 window.initSystemHealth = initSystemHealth;
 window.fetchSystemHealth = fetchSystemHealth;
+window.getSystemHealth = getSystemHealth;

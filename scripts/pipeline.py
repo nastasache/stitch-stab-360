@@ -234,6 +234,65 @@ def update_status(status_file, data):
 
 _GLOBAL_ARGS = None
 
+try:
+    from utils.tool_resolver import probe_nvenc
+except ImportError:
+    def probe_nvenc(ffmpeg_bin="ffmpeg"):
+        """Checks whether NVIDIA NVENC hardware encoding is functional.
+
+        Runs a minimal probe encode using h264_nvenc to verify that
+        the GPU, drivers, and runtime libraries (libcuda, libnvidia-encode)
+        are operational.
+
+        Returns:
+            tuple[bool, str]: (is_operational, failure_reason)
+        """
+        probe_cmd = [
+            ffmpeg_bin,
+            "-f", "lavfi",
+            "-i", "nullsrc=s=256x256:d=0.04",
+            "-c:v", "h264_nvenc",
+            "-f", "null",
+            "-"
+        ]
+        try:
+            proc = subprocess.run(
+                probe_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                errors="replace",
+                timeout=3.0,
+                creationflags=WIN_NO_WINDOW
+            )
+            if proc.returncode == 0:
+                return True, ""
+
+            stderr = proc.stderr or proc.stdout or ""
+            reason = "Unknown encoder error"
+            if "Cannot load libcuda" in stderr or "Cannot load nvcuda" in stderr:
+                reason = "CUDA driver library (libcuda / nvcuda) could not be loaded (no GPU passthrough or missing drivers in container)"
+            elif "Cannot load libnvidia-encode" in stderr:
+                reason = "NVENC library (libnvidia-encode.so.1) not available in current environment"
+            elif "No NVENC capable devices found" in stderr or "No capable devices found" in stderr:
+                reason = "No NVENC-capable NVIDIA GPU devices detected"
+            elif "minimum required Nvidia driver" in stderr:
+                reason = "Installed NVIDIA driver is older than the minimum version required by NVENC"
+            elif "Could not open encoder" in stderr:
+                reason = "Failed to initialize NVENC encoder hardware context"
+            else:
+                for line in stderr.splitlines():
+                    line_clean = line.strip()
+                    if line_clean and any(err_kw in line_clean.lower() for err_kw in ["error", "cannot", "failed", "not permitted"]):
+                        reason = line_clean
+                        break
+            return False, reason
+        except subprocess.TimeoutExpired:
+            return False, "NVENC hardware probe timed out"
+        except Exception as e:
+            return False, str(e)
+
+
 def run_ffmpeg(cmd, status_file, duration, start_ts, phase_label, status_code="stitching", active_duration=None):
     """Executes an FFmpeg or Python subprocess while streaming progress to status JSON.
 
@@ -457,6 +516,39 @@ def run_ffmpeg(cmd, status_file, duration, start_ts, phase_label, status_code="s
     if process.returncode != 0:
         stderr_log = "\n".join(stderr_log_lines[-20:])
         print(f"Command ({phase_label}) failed with code {process.returncode}:\n{stderr_log}")
+        if "-c:v" in cmd and any(enc in cmd for enc in ["h264_nvenc", "hevc_nvenc"]):
+            stderr_full = "\n".join(stderr_log_lines)
+            if any(k in stderr_full.lower() for k in ["cannot load libcuda", "cannot load nvcuda", "cannot load libnvidia", "could not open encoder", "no nvenc capable"]):
+                print(
+                    f"\n" + "=" * 70 + "\n"
+                    f"[Pipeline NOTICE] NVENC encoding failed during '{phase_label}'.\n"
+                    f"  Action: Automatically retrying with CPU encoder (libx264).\n"
+                    + "=" * 70 + "\n",
+                    flush=True
+                )
+                global _GLOBAL_ARGS
+                if _GLOBAL_ARGS:
+                    _GLOBAL_ARGS.hwaccel = False
+                fallback_cmd = []
+                skip_next = 0
+                for i, arg in enumerate(cmd):
+                    if skip_next > 0:
+                        skip_next -= 1
+                        continue
+                    if arg in ["h264_nvenc", "hevc_nvenc"]:
+                        fallback_cmd.append("libx264")
+                    elif arg in ["-spatial-aq", "-temporal-aq", "-rc-lookahead"]:
+                        skip_next = 1
+                    elif arg == "-rc" and i + 1 < len(cmd) and cmd[i + 1] in ["constqp", "vbr"]:
+                        skip_next = 1
+                    elif arg == "-preset" and i + 1 < len(cmd) and cmd[i + 1].startswith("p"):
+                        fallback_cmd.extend(["-preset", "medium"])
+                        skip_next = 1
+                    elif arg == "-cq":
+                        fallback_cmd.append("-crf")
+                    else:
+                        fallback_cmd.append(arg)
+                return run_ffmpeg(fallback_cmd, status_file, duration, start_ts, f"{phase_label} [libx264 fallback]", status_code, active_duration)
     return process.returncode
 
 def ensure_circle_mask(width, height, script_dir):
@@ -2600,6 +2692,23 @@ def main():
 
     args = parser.parse_args()
     _GLOBAL_ARGS = args
+
+    if args.hwaccel:
+        nvenc_ok, nvenc_reason = probe_nvenc()
+        if not nvenc_ok:
+            args.hwaccel = False
+            print(
+                f"\n" + "=" * 70 + "\n"
+                f"[Pipeline NOTICE] NVIDIA NVENC hardware acceleration requested, but initialization failed:\n"
+                f"  Reason: {nvenc_reason}\n"
+                f"  Fallback: Automatically switching to CPU encoder (libx264).\n"
+                + "=" * 70 + "\n",
+                flush=True
+            )
+            update_status(args.status_file, {
+                "warning": f"NVENC unavailable ({nvenc_reason}). Switched to libx264."
+            })
+
     script_dir = os.path.dirname(os.path.abspath(__file__))
     stab_video_file = None
     step3_telemetry = None
