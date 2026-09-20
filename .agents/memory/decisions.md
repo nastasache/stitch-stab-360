@@ -79,3 +79,7 @@ Injecting -hwaccel cuda with -hwaccel_output_format yuv420p produces green/cyan 
 
 ## [2026-09-20] CodeQL Command-Line Injection Hardening (Alert #144)
 Hardened subprocess invocations in streetview_gpx.py and routers/streetview.py by validating input paths against leading hyphens (CWE-088 option injection), resolving binaries via utils.tool_resolver, using the '--' positional operand delimiter, and validating file existence.
+
+
+## [2026-09-20] DRY Command-Line Injection Hardening & Centralized Process Spawner (Alerts #142 & #143)
+Centralized subprocess.Popen and async process spawning into spawn_background_process and run_async_subprocess in routers/common.py with automatic platform flags (CREATE_NEW_PROCESS_GROUP/CREATE_NO_WINDOW on Windows, start_new_session on POSIX). Added centralized safe_choice allowlists and safe_number type coercion to eliminate command-line injection vectors across routers.

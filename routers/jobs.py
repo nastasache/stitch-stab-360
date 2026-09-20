@@ -34,6 +34,10 @@ from routers.common import (
     resolve_video_version,
     kill_process_tree,
     run_async_subprocess,
+    spawn_background_process,
+    safe_number,
+    safe_choice,
+    sanitize_cmd_arg,
     _managed_pids,
     save_managed_pids,
     get_active_job,
@@ -736,14 +740,20 @@ async def api_start_job(request: Request):
     pipeline_cmd = [
         sys.executable, "-B", "-u", "scripts/pipeline.py",
         "--input", input_name, "--output", output_name,
-        "--ih_fov", str(gp("ih_fov", PIPELINE_DEFAULTS["ih_fov"])), "--iv_fov", str(gp("iv_fov", PIPELINE_DEFAULTS["iv_fov"])),
-        "--raw_rotation", str(gp("raw_rotation", PIPELINE_DEFAULTS["raw_rotation"])),
-        "--yaw", str(gp("yaw", PIPELINE_DEFAULTS["yaw"])), "--pitch", str(gp("pitch", PIPELINE_DEFAULTS["pitch"])), "--roll", str(gp("roll", PIPELINE_DEFAULTS["roll"])),
-        "--left_y_offset", str(gp("left_y_offset", PIPELINE_DEFAULTS["left_y_offset"])), "--rear_roll_offset", str(gp("rear_roll_offset", PIPELINE_DEFAULTS["rear_roll_offset"])),
-        "--preset", str(gp("ffmpeg_preset", gp("preset", PIPELINE_DEFAULTS["ffmpeg_preset"]))), "--crf", str(gp("ffmpeg_crf", gp("crf", str(PIPELINE_DEFAULTS["ffmpeg_crf"])))),
+        "--ih_fov", safe_number(gp("ih_fov"), PIPELINE_DEFAULTS["ih_fov"]),
+        "--iv_fov", safe_number(gp("iv_fov"), PIPELINE_DEFAULTS["iv_fov"]),
+        "--raw_rotation", safe_number(gp("raw_rotation"), PIPELINE_DEFAULTS["raw_rotation"]),
+        "--yaw", safe_number(gp("yaw"), PIPELINE_DEFAULTS["yaw"]),
+        "--pitch", safe_number(gp("pitch"), PIPELINE_DEFAULTS["pitch"]),
+        "--roll", safe_number(gp("roll"), PIPELINE_DEFAULTS["roll"]),
+        "--left_y_offset", safe_number(gp("left_y_offset"), PIPELINE_DEFAULTS["left_y_offset"]),
+        "--rear_roll_offset", safe_number(gp("rear_roll_offset"), PIPELINE_DEFAULTS["rear_roll_offset"]),
+        "--preset", safe_choice(gp("ffmpeg_preset", gp("preset")), ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow", "p1", "p2", "p3", "p4", "p5", "p6", "p7"], PIPELINE_DEFAULTS["ffmpeg_preset"]),
+        "--crf", safe_number(gp("ffmpeg_crf", gp("crf")), PIPELINE_DEFAULTS["ffmpeg_crf"], cast_fn=int),
         "--blend_width", str(actual_blend_width), "--mask_file", mask_file,
-        "--anti_vignette_angle", str(gp("anti_vignette_angle", PIPELINE_DEFAULTS["anti_vignette_angle"])),
-        "--nadir_fov", str(gp("nadir_fov", PIPELINE_DEFAULTS["nadir_fov"])), "--nadir_fov_v", str(gp("nadir_fov_v", PIPELINE_DEFAULTS["nadir_fov_v"])),
+        "--anti_vignette_angle", safe_number(gp("anti_vignette_angle"), PIPELINE_DEFAULTS["anti_vignette_angle"]),
+        "--nadir_fov", safe_number(gp("nadir_fov"), PIPELINE_DEFAULTS["nadir_fov"]),
+        "--nadir_fov_v", safe_number(gp("nadir_fov_v"), PIPELINE_DEFAULTS["nadir_fov_v"]),
         "--status_file", status_file
     ]
 
@@ -808,26 +818,36 @@ async def api_start_job(request: Request):
 
     if str(gp("streetview_enabled", "0")) == "1":
         pipeline_cmd.append("--streetview_enabled")
-        pipeline_cmd.extend(["--streetview_mode", str(gp("streetview_mode", PIPELINE_DEFAULTS["streetview_mode"]))])
-        pipeline_cmd.extend(["--streetview_checkpoints", str(gp("streetview_checkpoints", ""))])
-        pipeline_cmd.extend(["--streetview_gpx_path", resolve_gpx_file(str(gp("streetview_gpx_path", "")))])
-        pipeline_cmd.extend(["--streetview_start_time", str(gp("streetview_start_time", ""))])
-        pipeline_cmd.extend(["--streetview_time_offset", str(gp("streetview_time_offset", "0"))])
+        pipeline_cmd.extend(["--streetview_mode", safe_choice(gp("streetview_mode"), ["A", "B"], PIPELINE_DEFAULTS["streetview_mode"])])
+        sv_cps = str(gp("streetview_checkpoints", "")).strip()
+        if sv_cps and not sv_cps.startswith("-"):
+            pipeline_cmd.extend(["--streetview_checkpoints", sv_cps])
+        raw_sv_gpx = resolve_gpx_file(str(gp("streetview_gpx_path", "")))
+        if raw_sv_gpx and not raw_sv_gpx.startswith("-"):
+            pipeline_cmd.extend(["--streetview_gpx_path", raw_sv_gpx])
+        sv_st = str(gp("streetview_start_time", "")).strip()
+        if sv_st and not sv_st.startswith("-"):
+            pipeline_cmd.extend(["--streetview_start_time", sv_st])
+        pipeline_cmd.extend(["--streetview_time_offset", safe_number(gp("streetview_time_offset"), "0")])
         if str(gp("streetview_auto_pad", "1")) == "0": pipeline_cmd.append("--streetview_no_auto_pad")
-        sv_bitrate = str(gp("streetview_bitrate", PIPELINE_DEFAULTS["streetview_bitrate"]))
-        if sv_bitrate: pipeline_cmd.extend(["--streetview_bitrate", sv_bitrate])
-        sv_start_coord = str(gp("streetview_start_coord", ""))
-        if sv_start_coord: pipeline_cmd.extend(["--streetview_start_coord", sv_start_coord])
-        sv_end_coord = str(gp("streetview_end_coord", ""))
-        if sv_end_coord: pipeline_cmd.extend(["--streetview_end_coord", sv_end_coord])
+        sv_bitrate = str(gp("streetview_bitrate", PIPELINE_DEFAULTS["streetview_bitrate"])).strip()
+        if sv_bitrate and not sv_bitrate.startswith("-"):
+            pipeline_cmd.extend(["--streetview_bitrate", sv_bitrate])
+        sv_start_coord = str(gp("streetview_start_coord", "")).strip()
+        if sv_start_coord and not sv_start_coord.startswith("-"):
+            pipeline_cmd.extend(["--streetview_start_coord", sv_start_coord])
+        sv_end_coord = str(gp("streetview_end_coord", "")).strip()
+        if sv_end_coord and not sv_end_coord.startswith("-"):
+            pipeline_cmd.extend(["--streetview_end_coord", sv_end_coord])
         if str(gp("streetview_smooth_gps", "1")) == "1": pipeline_cmd.append("--streetview_smooth_gps")
         if str(gp("streetview_strip_audio", "1")) == "0":
             pipeline_cmd.append("--streetview_keep_audio")
         else:
             pipeline_cmd.append("--streetview_strip_audio")
 
-    video_bitrate = str(gp("video_bitrate", ""))
-    if video_bitrate: pipeline_cmd.extend(["--video_bitrate", video_bitrate])
+    video_bitrate = str(gp("video_bitrate", "")).strip()
+    if video_bitrate and not video_bitrate.startswith("-"):
+        pipeline_cmd.extend(["--video_bitrate", video_bitrate])
     if str(gp("remove_audio", "0")) == "1": pipeline_cmd.append("--remove_audio")
     if str(gp("prompt_transforms", "1")) == "0": pipeline_cmd.append("--no_prompt_transforms")
     if str(gp("fallback_unstabilized", "1")) == "0": pipeline_cmd.append("--no_fallback_unstabilized")
@@ -838,10 +858,7 @@ async def api_start_job(request: Request):
 
     cmd_text = subprocess.list2cmdline(pipeline_cmd)
     with open(log_file, "a", encoding="utf-8") as log_handle:
-        if sys.platform == "win32":
-            proc = subprocess.Popen(pipeline_cmd, stdout=log_handle, stderr=subprocess.STDOUT, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW)
-        else:
-            proc = subprocess.Popen(pipeline_cmd, stdout=log_handle, stderr=subprocess.STDOUT, start_new_session=True)
+        proc = spawn_background_process(pipeline_cmd, stdout=log_handle, stderr=subprocess.STDOUT)
 
     _managed_pids[job_id] = proc.pid
     save_managed_pids()

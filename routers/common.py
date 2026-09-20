@@ -299,6 +299,107 @@ def check_disk_space(input_file: str = "", num_stages: int = 1, min_margin_mb: i
 
 # ── Helper Functions ─────────────────────────────────────────────────────────
 
+def sanitize_cmd_arg(arg: Any) -> str:
+    """Sanitize and validate a command-line argument to prevent command and argument injection.
+
+    Args:
+        arg: Value to sanitize.
+
+    Returns:
+        Safe string representation without null bytes.
+
+    Raises:
+        ValueError: If null bytes or prohibited control sequences are detected.
+    """
+    if arg is None:
+        return ""
+    s = str(arg)
+    if "\0" in s:
+        raise ValueError("Null byte detected in command argument.")
+    return s
+
+
+def safe_number(val: Any, default: Any, cast_fn=float) -> str:
+    """Validate and strictly cast a numeric CLI parameter, falling back to default.
+
+    Prevents arbitrary string injection in numeric arguments (e.g. yaw, pitch, roll, fov).
+
+    Args:
+        val: Input value from request or configuration.
+        default: Fallback numeric value.
+        cast_fn: Type conversion function (float or int).
+
+    Returns:
+        String representation of the validated number.
+    """
+    try:
+        if val is None or str(val).strip() == "":
+            return str(cast_fn(default))
+        return str(cast_fn(val))
+    except (ValueError, TypeError):
+        return str(cast_fn(default))
+
+
+def safe_choice(val: Any, allowed: Any, default: str) -> str:
+    """Validate a string value against a strict allowlist of permitted options.
+
+    Args:
+        val: Input value from request or configuration.
+        allowed: Collection of permitted literal strings.
+        default: Safe fallback string.
+
+    Returns:
+        Matched option string if present in allowlist, otherwise default.
+    """
+    s = str(val).strip() if val is not None else ""
+    if s in allowed:
+        return s
+    return default
+
+
+def spawn_background_process(
+    cmd: list[str],
+    stdout=None,
+    stderr=subprocess.STDOUT,
+    cwd: Optional[str] = None,
+    env: Optional[dict] = None
+) -> subprocess.Popen:
+    """Spawn a detached background process across Windows and POSIX safely.
+
+    Consolidates platform-specific process creation flags (CREATE_NEW_PROCESS_GROUP
+    on Windows, start_new_session on POSIX) and guarantees arguments are sanitized.
+
+    Args:
+        cmd: List of command arguments.
+        stdout: File handle or pipe for stdout redirection.
+        stderr: File handle or pipe for stderr redirection.
+        cwd: Working directory path.
+        env: Environment variables dictionary.
+
+    Returns:
+        Spawned subprocess.Popen instance.
+    """
+    clean_cmd = [sanitize_cmd_arg(a) for a in cmd if a is not None]
+    if not clean_cmd:
+        raise ValueError("Cannot spawn background process with empty command list.")
+
+    kwargs: dict[str, Any] = {
+        "stdout": stdout,
+        "stderr": stderr,
+    }
+    if cwd:
+        kwargs["cwd"] = cwd
+    if env:
+        kwargs["env"] = env
+
+    if sys.platform == "win32":
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+    else:
+        kwargs["start_new_session"] = True
+
+    return subprocess.Popen(clean_cmd, **kwargs)
+
+
 async def run_async_subprocess(*args, **kwargs) -> tuple[bytes, bytes]:
     """Run a subprocess asynchronously with automatic fallback for Windows loops.
 
@@ -309,11 +410,12 @@ async def run_async_subprocess(*args, **kwargs) -> tuple[bytes, bytes]:
     Returns:
         A tuple containing (stdout_bytes, stderr_bytes).
     """
+    clean_args = [sanitize_cmd_arg(a) for a in args if a is not None]
     if sys.platform == "win32" and "creationflags" not in kwargs:
         kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
     try:
         proc = await asyncio.create_subprocess_exec(
-            *args,
+            *clean_args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             **kwargs
@@ -322,7 +424,7 @@ async def run_async_subprocess(*args, **kwargs) -> tuple[bytes, bytes]:
         return stdout, stderr
     except (NotImplementedError, AttributeError):
         def _sync_exec():
-            cmd_list = [str(a) for a in args]
+            cmd_list = [str(a) for a in clean_args]
             sub_kwargs = dict(kwargs)
             if sys.platform == "win32" and "creationflags" not in sub_kwargs:
                 sub_kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
