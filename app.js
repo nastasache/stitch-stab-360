@@ -3654,7 +3654,8 @@ function ensureTabVideoLoaded(tab) {
         initFunc();
     }
 
-    const pendingSrc = videoEl.getAttribute('data-pending-src') || (videoEl === originalVideo && options.input && options.input.value ? resolveVideoSrc(options.input.value) : null);
+    const pendingRaw = videoEl.getAttribute('data-pending-src') || (videoEl === originalVideo && options.input && options.input.value ? options.input.value : null);
+    const pendingSrc = resolveVideoSrc(pendingRaw);
     const loadedSrc = videoEl.getAttribute('data-loaded-src');
 
     touchVideoInLRU(videoEl);
@@ -4884,8 +4885,8 @@ async function showProceedConfirmation() {
 
         return `
         <div style="display: flex; justify-content: space-between; align-items: center; padding: ${item.highlight ? '0.45rem 0.5rem' : '0.35rem 0.5rem'}; border-radius: ${item.highlight ? '6px' : '4px'}; background: ${bg}; ${border}">
-            <span style="color: ${labelColor}; font-weight: ${labelWeight}; flex-shrink: 0; margin-right: 8px;">${item.label}</span>
-            <span style="color: ${item.color}; font-weight: ${item.highlight ? '700' : '600'}; font-family: monospace; font-size: ${item.fontSize || (item.highlight ? '1.0rem' : '0.92rem')}; text-align: right; word-break: break-all;" title="${item.title || ''}">${item.value}</span>
+            <span style="color: ${labelColor}; font-weight: ${labelWeight}; flex-shrink: 0; margin-right: 8px;">${escapeHtml(item.label)}</span>
+            <span style="color: ${item.color}; font-weight: ${item.highlight ? '700' : '600'}; font-family: monospace; font-size: ${item.fontSize || (item.highlight ? '1.0rem' : '0.92rem')}; text-align: right; word-break: break-all;" title="${escapeHtml(item.title || '')}">${escapeHtml(item.value)}</span>
         </div>
         `;
     }).join('');
@@ -5456,12 +5457,33 @@ function formatTimeHHMMSS(val) {
 }
 
 function resolveVideoSrc(path) {
-    if (!path) return '';
-    path = path.replace(/\\/g, '/');
-    if (path.startsWith('data/') || path.startsWith('samples/') || path.startsWith('/') || path.startsWith('blob:') || path.includes('://')) {
-        return path;
+    if (!path || typeof path !== 'string') return '';
+    let p = path.trim().replace(/\\/g, '/');
+    if (/^(javascript|data|vbscript):/i.test(p)) return '';
+    if (p.startsWith('blob:')) {
+        try {
+            const u = new URL(p);
+            if (u.origin === window.location.origin) return p;
+        } catch (e) {
+            return '';
+        }
     }
-    return `data/input/videos/${path}`;
+    if (p.includes('://')) {
+        try {
+            const u = new URL(p, window.location.origin);
+            if (u.origin !== window.location.origin) return '';
+            if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+            p = u.pathname;
+        } catch (e) {
+            return '';
+        }
+    }
+    p = p.replace(/^\/+/, '');
+    if (p.startsWith('data/') || p.startsWith('samples/')) {
+        return p;
+    }
+    const cleanName = p.replace(/[^a-zA-Z0-9_\-\.]/g, '_').replace(/^[\.\-]+/, '');
+    return cleanName ? `data/input/videos/${cleanName}` : '';
 }
 
 async function loadVideoMetadata() {

@@ -40,9 +40,19 @@ class TestSecuritySanitization(unittest.TestCase):
         self.assertEqual(sanitize_cmd_arg(123), "123")
 
     def test_sanitize_cmd_arg_rejects_null_bytes(self):
-        """Ensure arguments containing null bytes raise ValueError."""
+        """Ensure arguments containing null bytes or injection characters raise ValueError."""
         with self.assertRaises(ValueError):
             sanitize_cmd_arg("dangerous\0arg")
+        with self.assertRaises(ValueError):
+            sanitize_cmd_arg("foo; bar")
+        with self.assertRaises(ValueError):
+            sanitize_cmd_arg("foo | bar")
+        with self.assertRaises(ValueError):
+            sanitize_cmd_arg("foo & bar")
+        with self.assertRaises(ValueError):
+            sanitize_cmd_arg("`whoami`")
+        with self.assertRaises(ValueError):
+            sanitize_cmd_arg("$HOME")
 
     def test_safe_number(self):
         """Ensure safe_number coerces numbers and falls back on injection attempts."""
@@ -77,6 +87,11 @@ class TestSecuritySanitization(unittest.TestCase):
         """Ensure spawn_background_process rejects an empty command list."""
         with self.assertRaises(ValueError):
             spawn_background_process([])
+
+    def test_spawn_background_process_unauthorized_executable(self):
+        """Ensure spawn_background_process rejects unauthorized executables."""
+        with self.assertRaises(ValueError):
+            spawn_background_process(["malicious_binary", "--arg"])
 
     def test_safe_job_id(self):
         """Ensure safe_job_id removes illegal characters and generates safe IDs."""

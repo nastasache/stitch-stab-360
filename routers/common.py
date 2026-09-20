@@ -321,8 +321,8 @@ def sanitize_cmd_arg(arg: Any) -> str:
     if arg is None:
         return ""
     s = str(arg)
-    if "\0" in s:
-        raise ValueError("Null byte detected in command argument.")
+    if any(c in s for c in ("\0", "\n", "\r", ";", "&", "|", "`", "$", ">", "<")):
+        raise ValueError(f"Prohibited control sequence in command argument: {s!r}")
     return s
 
 
@@ -341,10 +341,14 @@ def safe_number(val: Any, default: Any, cast_fn=float) -> str:
     """
     try:
         if val is None or str(val).strip() == "":
-            return str(cast_fn(default))
-        return str(cast_fn(val))
+            num = float(default)
+        else:
+            num = float(val)
+        if cast_fn is int:
+            return str(int(num))
+        return str(float(num))
     except (ValueError, TypeError):
-        return str(cast_fn(default))
+        return str(default)
 
 
 def safe_choice(val: Any, allowed: Any, default: str) -> str:
@@ -359,9 +363,10 @@ def safe_choice(val: Any, allowed: Any, default: str) -> str:
         Matched option string if present in allowlist, otherwise default.
     """
     s = str(val).strip() if val is not None else ""
-    if s in allowed:
-        return s
-    return default
+    for opt in allowed:
+        if s == str(opt):
+            return str(opt)
+    return str(default)
 
 
 def spawn_background_process(
@@ -386,6 +391,14 @@ def spawn_background_process(
     Returns:
         Spawned subprocess.Popen instance.
     """
+    if not cmd:
+        raise ValueError("Cannot spawn background process with empty command list.")
+
+    allowed_executables = {sys.executable, "python", "python3", "ffmpeg", "ffprobe"}
+    cmd_exec = str(cmd[0])
+    if cmd_exec not in allowed_executables and not cmd_exec.endswith(os.sep + "python.exe"):
+        raise ValueError(f"Unauthorized executable for background process: {cmd_exec!r}")
+
     clean_cmd = [sanitize_cmd_arg(a) for a in cmd if a is not None]
     if not clean_cmd:
         raise ValueError("Cannot spawn background process with empty command list.")

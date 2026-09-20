@@ -1840,18 +1840,45 @@
       }
     }
 
+    function sanitizeMediaUrl(rawUrl) {
+      if (!rawUrl || typeof rawUrl !== 'string') return '';
+      const s = rawUrl.trim();
+      if (/^(javascript|data|vbscript):/i.test(s)) return '';
+      if (s.startsWith('blob:')) {
+        try {
+          const u = new URL(s);
+          if (u.origin === window.location.origin) return s;
+        } catch (e) {
+          return '';
+        }
+      }
+      try {
+        const u = new URL(s, window.location.origin);
+        if (u.origin !== window.location.origin) return '';
+        if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+        return u.pathname + u.search;
+      } catch (e) {
+        return '';
+      }
+    }
+
     function loadVideo(src, fileObj = null) {
       hudStatus.textContent = 'Loading video...';
+      const safeSrc = sanitizeMediaUrl(src);
+      if (!safeSrc) {
+        hudStatus.textContent = 'Invalid video source URL';
+        return;
+      }
 
       if (fileObj && fileObj.name) {
         state.videoName = fileObj.name;
         if (!state.outBase) {
           state.outBase = fileObj.name.replace(/\.[^/.]+$/, '');
         }
-      } else if (typeof src === 'string' && !src.startsWith('blob:')) {
-        state.videoName = src;
+      } else if (typeof safeSrc === 'string' && !safeSrc.startsWith('blob:')) {
+        state.videoName = safeSrc;
         if (!state.outBase) {
-          const parts = src.split(/[\\/]/);
+          const parts = safeSrc.split(/[\\/]/);
           const fname = parts[parts.length - 1];
           state.outBase = fname.replace(/\.[^/.]+$/, '');
         }
@@ -1870,7 +1897,7 @@
         state.currentFrame = 0;
         inputFrame.max = state.totalFrames - 1;
 
-        checkVrVideoFormat(video.videoWidth, video.videoHeight, fileObj || src);
+        checkVrVideoFormat(video.videoWidth, video.videoHeight, fileObj || safeSrc);
 
         videoTexture = new THREE.VideoTexture(video);
         videoTexture.minFilter = THREE.LinearFilter;
@@ -1891,7 +1918,7 @@
         hudStatus.textContent = 'Error loading video';
       }, { once: true });
 
-      video.src = src;
+      video.src = safeSrc;
       video.load();
 
       if (video.readyState >= 1 && video.videoWidth > 0) {
@@ -4126,7 +4153,8 @@
 
       // Auto-load checkpoints if provided via ?checkpoints= or if out_base has saved checkpoints
       const checkpointsParam = urlParams.get('checkpoints');
-      const targetCpUrl = checkpointsParam || (outBaseParam ? `data/runtime/work/${outBaseParam}_horizon_checkpoints.json` : '');
+      const rawTargetCpUrl = checkpointsParam || (outBaseParam ? `data/runtime/work/${outBaseParam}_horizon_checkpoints.json` : '');
+      const targetCpUrl = sanitizeMediaUrl(rawTargetCpUrl);
       if (targetCpUrl) {
         fetch(targetCpUrl)
           .then(res => {
@@ -4157,7 +4185,11 @@
               renderCheckpoints();
               updateTimelineUI();
               updateCameraRotation();
-              hudStatus.innerHTML = `<span style="color:var(--success); font-weight:bold;">Loaded ${data.checkpoints.length} checkpoints from ${targetCpUrl}</span>`;
+              const msgSpan = document.createElement('span');
+              msgSpan.style.color = 'var(--success)';
+              msgSpan.style.fontWeight = 'bold';
+              msgSpan.textContent = `Loaded ${data.checkpoints.length} checkpoints from ${targetCpUrl}`;
+              hudStatus.replaceChildren(msgSpan);
             }
           })
           .catch(err => {});

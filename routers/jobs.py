@@ -595,6 +595,13 @@ async def api_start_job(request: Request):
     if not input_name:
         return JSONResponse({"status": "error", "error": f"Input file does not exist: {raw_input}"}, status_code=404)
 
+    base_dir_abs = os.path.realpath(os.path.abspath(str(BASE_DIR)))
+    input_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, input_name)))
+    if not input_abs.startswith(base_dir_abs + os.sep):
+        return JSONResponse({"status": "error", "error": "Unauthorized input path."}, status_code=400)
+    if not os.path.isfile(input_abs):
+        return JSONResponse({"status": "error", "error": f"Input file does not exist: {raw_input}"}, status_code=404)
+
     # 1. Backend Concurrency Guard & Mutex
     active_job = get_active_job()
     if active_job:
@@ -633,6 +640,9 @@ async def api_start_job(request: Request):
 
     job_id_raw = str(gp("job_id", ""))
     job_id     = safe_job_id(job_id_raw)
+    if not re.fullmatch(r'[a-zA-Z0-9_\-]+', job_id):
+        import uuid
+        job_id = f"job_{uuid.uuid4().hex[:12]}"
 
     status_file = get_status_file_path(job_id)
     log_file    = get_log_file_path(job_id)
@@ -651,6 +661,10 @@ async def api_start_job(request: Request):
     if not output_name:
         clean_out_base = re.sub(r'[^a-zA-Z0-9_\-]', '_', Path(os.path.basename(raw_output)).stem) or "output"
         output_name = f"data/runtime/work/{clean_out_base}.mp4"
+
+    output_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, output_name)))
+    if not output_abs.startswith(base_dir_abs + os.sep):
+        return JSONResponse({"status": "error", "error": "Unauthorized output path."}, status_code=400)
 
     blend_seams_val    = (str(gp("blend_seams", "1")) == "1" or str(gp("blend_seams", "")).lower() == "true")
     blend_width_raw    = int(float(gp("blend_width", "200")))
@@ -798,13 +812,16 @@ async def api_start_job(request: Request):
 
     if str(gp("nadir_enabled", "0")) == "1":
         nadir_logo_raw = resolve_nadir_logo(str(gp("nadir_logo", PIPELINE_DEFAULTS["nadir_logo_default"])))
-        if nadir_logo_raw and os.path.exists(nadir_logo_raw):
-            pipeline_cmd.extend(["--nadir_logo", nadir_logo_raw])
+        if nadir_logo_raw and not nadir_logo_raw.startswith("-"):
+            nadir_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, nadir_logo_raw)))
+            if nadir_abs.startswith(base_dir_abs + os.sep) and os.path.isfile(nadir_abs):
+                pipeline_cmd.extend(["--nadir_logo", nadir_logo_raw])
 
     if str(gp("stabilize", "0")) == "1" and not is_photo:
         pipeline_cmd.append("--stabilize")
-        valid_methods = {"telemetry", "kopf", "kabsch", "vidstab", "cinematic", "horizon", "traveldir"}
-        cleaned_methods = ",".join([m.strip() for m in str(gp("stabilize_methods", "telemetry,kopf,kabsch,vidstab,cinematic,horizon,traveldir")).split(",") if m.strip() in valid_methods])
+        ALLOWED_STAB_METHODS = ("telemetry", "kopf", "kabsch", "vidstab", "cinematic", "horizon", "traveldir")
+        requested_methods = str(gp("stabilize_methods", "telemetry,kopf,kabsch,vidstab,cinematic,horizon,traveldir")).split(",")
+        cleaned_methods = ",".join([m for m in ALLOWED_STAB_METHODS if any(m == req.strip() for req in requested_methods)])
         pipeline_cmd.extend(["--stabilize_methods", cleaned_methods or "telemetry,kopf,kabsch,vidstab,cinematic,horizon,traveldir"])
         pipeline_cmd.extend(["--stab_quality_mode", safe_choice(gp("stab_quality_mode"), ["draft", "standard", "high", "ultra"], PIPELINE_DEFAULTS["stab_quality_mode"])])
         pipeline_cmd.extend(["--telemetry_mode", safe_choice(gp("telemetry_mode"), ["fusion", "orientation", "gyro"], PIPELINE_DEFAULTS["telemetry_mode"])])
@@ -859,20 +876,22 @@ async def api_start_job(request: Request):
                     pass
         raw_sv_gpx = resolve_gpx_file(str(gp("streetview_gpx_path", "")))
         if raw_sv_gpx and not raw_sv_gpx.startswith("-"):
-            pipeline_cmd.extend(["--streetview_gpx_path", raw_sv_gpx])
+            sv_gpx_abs = os.path.realpath(os.path.abspath(os.path.join(base_dir_abs, raw_sv_gpx)))
+            if sv_gpx_abs.startswith(base_dir_abs + os.sep) and os.path.isfile(sv_gpx_abs):
+                pipeline_cmd.extend(["--streetview_gpx_path", raw_sv_gpx])
         sv_st = re.sub(r'[^a-zA-Z0-9:\.\-+_]', '', str(gp("streetview_start_time", "")).strip())
-        if sv_st:
+        if sv_st and re.fullmatch(r'[a-zA-Z0-9:\.\-+_]+', sv_st):
             pipeline_cmd.extend(["--streetview_start_time", sv_st])
         pipeline_cmd.extend(["--streetview_time_offset", safe_number(gp("streetview_time_offset"), "0")])
         if str(gp("streetview_auto_pad", "1")) == "0": pipeline_cmd.append("--streetview_no_auto_pad")
         sv_bitrate = re.sub(r'[^0-9a-zA-Z]', '', str(gp("streetview_bitrate", PIPELINE_DEFAULTS["streetview_bitrate"])).strip())
-        if sv_bitrate:
+        if sv_bitrate and re.fullmatch(r'[0-9]+[a-zA-Z]?', sv_bitrate):
             pipeline_cmd.extend(["--streetview_bitrate", sv_bitrate])
         sv_start_coord = re.sub(r'[^0-9\.,\- ]', '', str(gp("streetview_start_coord", "")).strip())
-        if sv_start_coord:
+        if sv_start_coord and re.fullmatch(r'[-+]?[0-9]*\.?[0-9]+,\s*[-+]?[0-9]*\.?[0-9]+', sv_start_coord):
             pipeline_cmd.extend(["--streetview_start_coord", sv_start_coord])
         sv_end_coord = re.sub(r'[^0-9\.,\- ]', '', str(gp("streetview_end_coord", "")).strip())
-        if sv_end_coord:
+        if sv_end_coord and re.fullmatch(r'[-+]?[0-9]*\.?[0-9]+,\s*[-+]?[0-9]*\.?[0-9]+', sv_end_coord):
             pipeline_cmd.extend(["--streetview_end_coord", sv_end_coord])
         if str(gp("streetview_smooth_gps", "1")) == "1": pipeline_cmd.append("--streetview_smooth_gps")
         if str(gp("streetview_strip_audio", "1")) == "0":
@@ -881,7 +900,7 @@ async def api_start_job(request: Request):
             pipeline_cmd.append("--streetview_strip_audio")
 
     video_bitrate = re.sub(r'[^0-9a-zA-Z]', '', str(gp("video_bitrate", "")).strip())
-    if video_bitrate:
+    if video_bitrate and re.fullmatch(r'[0-9]+[a-zA-Z]?', video_bitrate):
         pipeline_cmd.extend(["--video_bitrate", video_bitrate])
     if str(gp("remove_audio", "0")) == "1": pipeline_cmd.append("--remove_audio")
     if str(gp("prompt_transforms", "1")) == "0": pipeline_cmd.append("--no_prompt_transforms")
