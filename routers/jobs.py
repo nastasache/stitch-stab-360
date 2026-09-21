@@ -800,6 +800,9 @@ async def api_start_job(request: Request):
     ]
 
     if str(gp("ffmpeg_hwaccel", gp("hwaccel", "0"))) == "1": pipeline_cmd.append("--hwaccel")
+    v360_backend_val = "vulkan" if str(gp("v360_vulkan", "0")) == "1" else safe_choice(gp("v360_backend"), ["cpu", "vulkan"], PIPELINE_DEFAULTS.get("v360_backend", "cpu"))
+    if v360_backend_val:
+        pipeline_cmd.extend(["--v360_backend", v360_backend_val])
     if blend_seams_val: pipeline_cmd.append("--blend_seams")
     if str(gp("anti_vignette", "0")) == "1": pipeline_cmd.append("--anti_vignette")
     if str(gp("inject_intermediate_meta", "0")) == "1": pipeline_cmd.append("--inject_intermediate_meta")

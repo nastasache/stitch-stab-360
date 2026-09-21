@@ -490,6 +490,7 @@ const options = {
     ffmpeg_preset: document.getElementById('ffmpeg_preset'),
     ffmpeg_crf:    document.getElementById('ffmpeg_crf'),
     ffmpeg_hwaccel:document.getElementById('ffmpeg_hwaccel'),
+    v360_vulkan:   document.getElementById('v360_vulkan'),
     util_gcsv: document.getElementById('util_gcsv'),
     util_bigsh0t: document.getElementById('util_bigsh0t'),
     output: document.getElementById('output_name')
@@ -957,6 +958,8 @@ function collectPipelineConfig() {
         ffmpeg_preset: document.getElementById('ffmpeg_preset')?.value ?? 'medium',
         ffmpeg_crf: document.getElementById('ffmpeg_crf')?.value ?? '18',
         ffmpeg_hwaccel: document.getElementById('ffmpeg_hwaccel')?.checked ?? true,
+        v360_backend: document.getElementById('v360_vulkan')?.checked ? 'vulkan' : 'cpu',
+        v360_vulkan: document.getElementById('v360_vulkan')?.checked ?? false,
         video_bitrate: (() => {
             const vb = document.getElementById('video_bitrate')?.value ?? '80M';
             const vbc = document.getElementById('video_bitrate_custom')?.value?.trim();
@@ -1138,6 +1141,8 @@ function applyPipelineConfig(cfg, showToastName = '') {
     if (d.ffmpeg_preset !== undefined) setElementValue('ffmpeg_preset', d.ffmpeg_preset);
     if (d.ffmpeg_crf !== undefined) setElementValue('ffmpeg_crf', d.ffmpeg_crf);
     if (d.ffmpeg_hwaccel !== undefined) setElementValue('ffmpeg_hwaccel', d.ffmpeg_hwaccel);
+    if (d.v360_backend !== undefined) setElementValue('v360_vulkan', d.v360_backend === 'vulkan');
+    else if (d.v360_vulkan !== undefined) setElementValue('v360_vulkan', d.v360_vulkan);
     if (d.video_bitrate !== undefined) {
         const vbSel = document.getElementById('video_bitrate');
         const vbWrap = document.getElementById('video_bitrate_custom_wrap');
@@ -4302,6 +4307,7 @@ function buildStitchFormData(outputOverride, durationOverride) {
     bodyData.append('ffmpeg_preset', options.ffmpeg_preset.value);
     bodyData.append('ffmpeg_crf',     options.ffmpeg_crf.value);
     bodyData.append('ffmpeg_hwaccel', options.ffmpeg_hwaccel.checked ? '1' : '0');
+    bodyData.append('v360_backend', (options.v360_vulkan && options.v360_vulkan.checked) ? 'vulkan' : 'cpu');
     bodyData.append('blend_seams',   cb('blend_seams'));
     bodyData.append('blend_width',   readNumberInput('blend_width_val', 'blend_width', String(APP_CONFIG.pipeline_defaults.blend_width)));
     

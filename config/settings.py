@@ -92,6 +92,7 @@ PIPELINE_DEFAULTS = {
     "video_bitrate": "80M",
     "streetview_bitrate": "45M",
     "remove_audio": False,
+    "v360_backend": "cpu",
 
     # Nadir overlay
     "nadir_fov": 75.0,

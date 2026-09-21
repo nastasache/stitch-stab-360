@@ -235,8 +235,35 @@ def update_status(status_file, data):
 _GLOBAL_ARGS = None
 
 try:
-    from utils.tool_resolver import probe_nvenc
+    from utils.tool_resolver import probe_nvenc, probe_vulkan
 except ImportError:
+    def probe_vulkan(ffmpeg_bin="ffmpeg"):
+        probe_cmd = [
+            ffmpeg_bin,
+            "-init_hw_device", "vulkan=vk",
+            "-filter_hw_device", "vk",
+            "-f", "lavfi",
+            "-i", "nullsrc=s=64x64:d=0.04",
+            "-vf", "format=yuv420p,hwupload,v360_vulkan=input=flat:output=flat:w=64:h=64,hwdownload,format=yuv420p",
+            "-f", "null",
+            "-"
+        ]
+        try:
+            proc = subprocess.run(
+                probe_cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                errors="replace",
+                timeout=3.0,
+                creationflags=WIN_NO_WINDOW
+            )
+            if proc.returncode == 0:
+                return True, ""
+            return False, "Vulkan device or v360_vulkan filter probe failed"
+        except Exception as e:
+            return False, str(e)
+
     def probe_nvenc(ffmpeg_bin="ffmpeg"):
         """Checks whether NVIDIA NVENC hardware encoding is functional.
 
@@ -2609,6 +2636,7 @@ def main():
     parser.add_argument("--preset", "--ffmpeg_preset", dest="preset", default=PIPELINE_DEFAULTS["ffmpeg_preset"], help="FFmpeg preset")
     parser.add_argument("--crf", "--ffmpeg_crf", dest="crf", type=str, default=str(PIPELINE_DEFAULTS["ffmpeg_crf"]), help="CRF quality value (18 = high quality)")
     parser.add_argument("--hwaccel", "--ffmpeg_hwaccel", dest="hwaccel", action="store_true", help="Use NVENC hardware acceleration")
+    parser.add_argument("--v360_backend", choices=["cpu", "vulkan"], default=str(PIPELINE_DEFAULTS.get("v360_backend", "cpu")), help="v360 projection filter backend: cpu (default) or vulkan (GPU compute shader)")
     parser.add_argument("--blend_seams",  action="store_true",        help="Alpha-blend the two lenses at the seam lines (±90°)")
     parser.add_argument("--blend_width",  type=_parse_int, default=PIPELINE_DEFAULTS["blend_width"], help="Width of the blend region in pixels")
     parser.add_argument("--anti_vignette",action="store_true",        help="Apply edge brightening anti-vignette filter")
@@ -2714,6 +2742,23 @@ def main():
             update_status(args.status_file, {
                 "warning": f"NVENC unavailable ({nvenc_reason}). Switched to libx264."
             })
+
+    if getattr(args, "v360_backend", "cpu") == "vulkan":
+        vulkan_ok, vulkan_reason = probe_vulkan()
+        if not vulkan_ok:
+            args.v360_backend = "cpu"
+            print(
+                f"\n" + "=" * 70 + "\n"
+                f"[Pipeline NOTICE] Vulkan acceleration requested for v360, but initialization failed:\n"
+                f"  Reason: {vulkan_reason}\n"
+                f"  Fallback: Automatically switching v360 backend to CPU.\n"
+                + "=" * 70 + "\n",
+                flush=True
+            )
+            if getattr(args, 'status_file', None):
+                update_status(args.status_file, {
+                    "warning": f"v360 Vulkan unavailable ({vulkan_reason}). Switched to CPU."
+                })
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     stab_video_file = None
@@ -2950,6 +2995,16 @@ def main():
         raw_rot_filter = ""
         raw_in_label = "[0:v]"
 
+        q_mode_stitch = str(getattr(args, 'stab_quality_mode', '4'))
+        if getattr(args, "v360_backend", "cpu") == "vulkan":
+            if q_mode_stitch == "3":
+                print("[Pipeline] Notice: v360_vulkan bypassed for Phase 1 stitching because Quality Mode 3 (Lanczos) requires CPU v360.")
+                can_use_vulkan_stitch = False
+            else:
+                can_use_vulkan_stitch = True
+        else:
+            can_use_vulkan_stitch = False
+
         if use_split_lenses and mask_file and os.path.exists(mask_file):
             filter_complex = f"{raw_rot_filter}{raw_in_label}split[raw_l][raw_r];"
             if left_y_offset != 0:
@@ -2979,22 +3034,49 @@ def main():
             while yaw_r > 180: yaw_r -= 360
             while yaw_r < -180: yaw_r += 360
 
-            filter_complex += (
-                f"[left]v360=input=fisheye:output=equirect"
-                f":ih_fov={ih_fov_stitch:.4f}:iv_fov={iv_fov_stitch:.4f}"
-                f":yaw={yaw_l}:pitch={args.pitch}:roll={args.roll}"
-                f":w=3840:h=1920[eq_left];"
-            )
-            
-            # Apply rear_roll_offset to the right lens during equirectangular stitching alignment
             roll_r = float(args.roll) + float(args.rear_roll_offset)
 
-            filter_complex += (
-                f"[right]v360=input=fisheye:output=equirect"
-                f":ih_fov={ih_fov_stitch:.4f}:iv_fov={iv_fov_stitch:.4f}"
-                f":yaw={yaw_r}:pitch={args.pitch}:roll={roll_r}"
-                f":w=3840:h=1920[eq_right];"
-            )
+            if can_use_vulkan_stitch:
+                vk_yaw_l = -yaw_l
+                while vk_yaw_l > 180: vk_yaw_l -= 360
+                while vk_yaw_l < -180: vk_yaw_l += 360
+
+                vk_yaw_r = -yaw_r
+                while vk_yaw_r > 180: vk_yaw_r -= 360
+                while vk_yaw_r < -180: vk_yaw_r += 360
+
+                vk_pitch = -float(args.pitch)
+                vk_roll_l = -float(args.roll)
+                vk_roll_r = -roll_r
+
+                filter_complex += (
+                    f"[left]format=yuv420p,hwupload,scale_vulkan=w=3840:h=1920,"
+                    f"v360_vulkan=input=fisheye:output=equirect"
+                    f":ih_fov={ih_fov_stitch:.4f}:iv_fov={iv_fov_stitch:.4f}"
+                    f":yaw={vk_yaw_l}:pitch={vk_pitch}:roll={vk_roll_l}:rorder=rpy:w=3840:h=1920,"
+                    f"hwdownload,format=yuv420p[eq_left];"
+                )
+                filter_complex += (
+                    f"[right]format=yuv420p,hwupload,scale_vulkan=w=3840:h=1920,"
+                    f"v360_vulkan=input=fisheye:output=equirect"
+                    f":ih_fov={ih_fov_stitch:.4f}:iv_fov={ih_fov_stitch:.4f}"
+                    f":yaw={vk_yaw_r}:pitch={vk_pitch}:roll={vk_roll_r}:rorder=rpy:w=3840:h=1920,"
+                    f"hwdownload,format=yuv420p[eq_right];"
+                )
+            else:
+                filter_complex += (
+                    f"[left]v360=input=fisheye:output=equirect"
+                    f":ih_fov={ih_fov_stitch:.4f}:iv_fov={iv_fov_stitch:.4f}"
+                    f":yaw={yaw_l}:pitch={args.pitch}:roll={args.roll}"
+                    f":w=3840:h=1920[eq_left];"
+                )
+                filter_complex += (
+                    f"[right]v360=input=fisheye:output=equirect"
+                    f":ih_fov={ih_fov_stitch:.4f}:iv_fov={ih_fov_stitch:.4f}"
+                    f":yaw={yaw_r}:pitch={args.pitch}:roll={roll_r}"
+                    f":w=3840:h=1920[eq_right];"
+                )
+
             if abs(float(args.yaw)) > 0.001 or abs(float(args.pitch)) > 0.001 or abs(float(args.roll)) > 0.001:
                 filter_complex += (
                     f"[1:v]format=yuv420p,v360=input=equirect:output=equirect"
@@ -3002,21 +3084,42 @@ def main():
                     f"format=gray[mask_eq];"
                 )
             else:
-                filter_complex += "[1:v]format=gray[mask_eq];"
+                filter_complex += "[1:v]scale=3840:1920,format=gray[mask_eq];"
             filter_complex += "[eq_right][mask_eq]alphamerge[right_alpha];"
             filter_complex += "[eq_left][right_alpha]overlay=format=yuv420:eof_action=endall:shortest=1[final]"
 
-            stitch_cmd = [
-                "ffmpeg", "-y", "-progress", "-",
+            stitch_cmd = ["ffmpeg", "-y", "-progress", "-"]
+            if can_use_vulkan_stitch:
+                stitch_cmd.extend(["-init_hw_device", "vulkan=vk", "-filter_hw_device", "vk"])
+            stitch_cmd.extend([
                 "-i", current_file,
                 "-loop", "1", "-i", mask_file,
                 "-filter_complex", filter_complex,
                 "-map", "[final]", "-map", "0:a?"
-            ]
+            ])
         else:
             yaw_dfisheye = float(args.yaw) + 180.0
             while yaw_dfisheye > 180: yaw_dfisheye -= 360
             while yaw_dfisheye < -180: yaw_dfisheye += 360
+
+            if can_use_vulkan_stitch:
+                vk_yaw_df = -yaw_dfisheye
+                while vk_yaw_df > 180: vk_yaw_df -= 360
+                while vk_yaw_df < -180: vk_yaw_df += 360
+                vk_pitch = -float(args.pitch)
+                vk_roll = -float(args.roll)
+                v360_stitch_expr = (
+                    f"format=yuv420p,hwupload,v360_vulkan=input=dfisheye:output=equirect"
+                    f":ih_fov={args.ih_fov}:iv_fov={args.iv_fov}"
+                    f":yaw={vk_yaw_df}:pitch={vk_pitch}:roll={vk_roll}:rorder=rpy:w={cur_w}:h={cur_h},"
+                    f"hwdownload,format=yuv420p"
+                )
+            else:
+                v360_stitch_expr = (
+                    f"v360=input=dfisheye:output=equirect"
+                    f":ih_fov={args.ih_fov}:iv_fov={args.iv_fov}"
+                    f":yaw={yaw_dfisheye}:pitch={args.pitch}:roll={args.roll}"
+                )
 
             if left_y_offset != 0:
                 abs_offset   = abs(left_y_offset)
@@ -3037,9 +3140,7 @@ def main():
                 
                 filter_complex += (
                     f"[left][right]hstack[combined];"
-                    f"[combined]v360=input=dfisheye:output=equirect"
-                    f":ih_fov={args.ih_fov}:iv_fov={args.iv_fov}"
-                    f":yaw={yaw_dfisheye}:pitch={args.pitch}:roll={args.roll}[eq]"
+                    f"[combined]{v360_stitch_expr}[eq]"
                 )
             else:
                 if args.anti_vignette:
@@ -3048,23 +3149,21 @@ def main():
                         f"[a]crop=1920:1920:0:0,vignette=mode=backward:angle={args.anti_vignette_angle}[left];"
                         f"[b]crop=1920:1920:1920:0,vignette=mode=backward:angle={args.anti_vignette_angle}[right];"
                         f"[left][right]hstack[combined];"
-                        f"[combined]v360=input=dfisheye:output=equirect"
-                        f":ih_fov={args.ih_fov}:iv_fov={args.iv_fov}"
-                        f":yaw={yaw_dfisheye}:pitch={args.pitch}:roll={args.roll}[eq]"
+                        f"[combined]{v360_stitch_expr}[eq]"
                     )
                 else:
                     filter_complex = (
-                        f"{raw_rot_filter}{raw_in_label}v360=input=dfisheye:output=equirect"
-                        f":ih_fov={args.ih_fov}:iv_fov={args.iv_fov}"
-                        f":yaw={yaw_dfisheye}:pitch={args.pitch}:roll={args.roll}[eq]"
+                        f"{raw_rot_filter}{raw_in_label}{v360_stitch_expr}[eq]"
                     )
 
-            stitch_cmd = [
-                "ffmpeg", "-y", "-progress", "-",
+            stitch_cmd = ["ffmpeg", "-y", "-progress", "-"]
+            if can_use_vulkan_stitch:
+                stitch_cmd.extend(["-init_hw_device", "vulkan=vk", "-filter_hw_device", "vk"])
+            stitch_cmd.extend([
                 "-i", current_file,
                 "-filter_complex", filter_complex,
                 "-map", "[eq]", "-map", "0:a?"
-            ]
+            ])
 
         if is_image or getattr(args, 'remove_audio', False):
             clean_cmd = []
@@ -3101,7 +3200,8 @@ def main():
             stitch_cmd += ["-pix_fmt", "yuv420p"] + audio_stitch_args + [step1_stitch]
 
         blend_str = f"{args.blend_width}px" if args.blend_seams else "Off"
-        phase_stitch = f"Stitching (FOV: {args.ih_fov}°x{args.iv_fov}°, YPR: {args.yaw}° {args.pitch}° {args.roll}°, blend: {blend_str})"
+        backend_tag = " [Vulkan GPU]" if can_use_vulkan_stitch else " [CPU]"
+        phase_stitch = f"Stitching{backend_tag} (FOV: {args.ih_fov}°x{args.iv_fov}°, YPR: {args.yaw}° {args.pitch}° {args.roll}°, blend: {blend_str})"
 
         update_status(args.status_file, {
             "status": "stitching", "phase": phase_stitch,

@@ -112,3 +112,15 @@ api_crop_video uses re.sub for sanitizing target output filenames; missing impor
 
 ## [2026-09-21] Missing BASE_DIR import in routers/videos.py
 api_crop_video and api_generate_preview reference BASE_DIR for path resolution and boundary verification; imported BASE_DIR from config.settings.
+
+
+## [2026-09-21] Vulkan HWAccel v360 Integration
+Integrated Vulkan GPU compute shader acceleration for Phase 1 dual-fisheye stitching using FFmpeg's native v360_vulkan filter with --v360_backend=cpu|vulkan. Ensured graceful fallback to CPU v360 when Quality Mode 3 (Lanczos) or complex split-lens alpha masking is active, or if probe_vulkan fails. Kept Phase 2 stabilization on CPU v360 for dynamic sendcmd support.
+
+
+## [2026-09-21] Vulkan GPU Acceleration for Seam Blending
+Accelerated Phase 1 split-lens seam blending with FFmpeg's v360_vulkan filter. Cropped left and right fisheye streams are uploaded to Vulkan hardware buffers, scaled to target 3840x1920 using scale_vulkan (required because v360_vulkan inherits input frame dimensions if not scaled), unwarped via v360_vulkan compute shaders, downloaded to CPU, and merged with the seam alpha mask via alphamerge and overlay.
+
+
+## [2026-09-21] v360_vulkan Inverse Rotation Matrix Kinematics
+FFmpeg's v360_vulkan GLSL compute shader implements an inverse ray-marching coordinate transform relative to CPU v360. In CPU v360, forward rotations are applied with default rotation order ypr. In v360_vulkan, the inverse mapping causes positive Euler angles to rotate in the reverse direction and in reverse order. To achieve identical mathematical alignment with CPU v360, angles passed to v360_vulkan must be negated (yaw = -yaw, pitch = -pitch, roll = -roll) and the rotation order reversed (rorder = rpy). When calibrated, pixel MAE drops from 72.8 down to 1.64 across 4K dual-fisheye frames.

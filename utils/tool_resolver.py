@@ -137,6 +137,79 @@ def probe_nvenc(ffmpeg_bin: Optional[str] = None, force_refresh: bool = False) -
         return res
 
 
+_VULKAN_PROBE_CACHE: Dict[str, Tuple[bool, str]] = {}
+
+
+def probe_vulkan(ffmpeg_bin: Optional[str] = None, force_refresh: bool = False) -> Tuple[bool, str]:
+    """Checks whether Vulkan hardware acceleration and v360_vulkan filter are functional.
+
+    Runs a minimal probe using -init_hw_device vulkan=vk and v360_vulkan filter
+    to verify that the GPU, Vulkan drivers/loader, and SPIR-V compute shaders
+    are operational.
+
+    Returns:
+        Tuple[bool, str]: (is_operational, failure_reason)
+    """
+    bin_target = str(ffmpeg_bin) if ffmpeg_bin else "ffmpeg"
+    cache_key = bin_target
+    if not force_refresh and cache_key in _VULKAN_PROBE_CACHE:
+        return _VULKAN_PROBE_CACHE[cache_key]
+
+    probe_cmd = [
+        bin_target,
+        "-init_hw_device", "vulkan=vk",
+        "-filter_hw_device", "vk",
+        "-f", "lavfi",
+        "-i", "nullsrc=s=64x64:d=0.04",
+        "-vf", "format=yuv420p,hwupload,v360_vulkan=input=flat:output=flat:w=64:h=64,hwdownload,format=yuv420p",
+        "-f", "null",
+        "-"
+    ]
+    try:
+        proc = subprocess.run(
+            probe_cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            errors="replace",
+            timeout=3.0,
+            creationflags=WIN_NO_WINDOW
+        )
+        if proc.returncode == 0:
+            res = (True, "")
+            _VULKAN_PROBE_CACHE[cache_key] = res
+            return res
+
+        stderr = proc.stderr or proc.stdout or ""
+        reason = "Unknown Vulkan error"
+        if "No such filter: 'v360_vulkan'" in stderr:
+            reason = "FFmpeg build lacks 'v360_vulkan' filter (requires FFmpeg with Vulkan filters)"
+        elif "Cannot load vulkan" in stderr or "vulkan-1.dll" in stderr or "libvulkan" in stderr:
+            reason = "Vulkan runtime library (vulkan-1.dll) not found on host system"
+        elif "Could not create Vulkan device" in stderr or "Failed to create Vulkan device" in stderr:
+            reason = "Failed to initialize Vulkan GPU device context"
+        elif "No Vulkan device found" in stderr or "no suitable device found" in stderr:
+            reason = "No Vulkan-compatible GPU devices detected"
+        else:
+            for line in stderr.splitlines():
+                line_clean = line.strip()
+                if line_clean and any(err_kw in line_clean.lower() for err_kw in ["error", "cannot", "failed", "no such filter"]):
+                    reason = line_clean
+                    break
+        res = (False, reason)
+        _VULKAN_PROBE_CACHE[cache_key] = res
+        return res
+    except subprocess.TimeoutExpired:
+        res = (False, "Vulkan hardware probe timed out")
+        _VULKAN_PROBE_CACHE[cache_key] = res
+        return res
+    except Exception as e:
+        print(f"[WARN] Vulkan hardware probe error: {e}", file=sys.stderr)
+        res = (False, "Vulkan hardware probe error.")
+        _VULKAN_PROBE_CACHE[cache_key] = res
+        return res
+
+
 def resolve_ffmpeg() -> Dict[str, Any]:
     """Discover, validate, and select the optimal FFmpeg binary.
 
