@@ -33,6 +33,8 @@ class TestVulkanAcceleration(unittest.TestCase):
             width=960,
             height=480
         )
+        ffmpeg_bin = resolve_ffmpeg()["path"]
+        cls.vulkan_available, cls.vulkan_reason = probe_vulkan(ffmpeg_bin=ffmpeg_bin)
 
     def test_01_probe_vulkan_structure(self):
         """Verify probe_vulkan returns a boolean and status string without crashing."""
@@ -76,6 +78,8 @@ class TestVulkanAcceleration(unittest.TestCase):
 
     def test_03_vulkan_mode3_lanczos_fallback(self):
         """Verify that Quality Mode 3 (Lanczos) automatically bypasses Vulkan to CPU v360."""
+        if not self.vulkan_available:
+            self.skipTest(f"Vulkan hardware acceleration unavailable: {self.vulkan_reason}")
         output_video = os.path.join(self.work_dir, "vulkan_mode3_out.mp4")
         status_file = os.path.join(self.work_dir, "vulkan_mode3_status.json")
 
@@ -110,6 +114,8 @@ class TestVulkanAcceleration(unittest.TestCase):
 
     def test_04_vulkan_seam_blending_stitching(self):
         """Verify that split-lens seam blending accelerates via Vulkan GPU v360 filter."""
+        if not self.vulkan_available:
+            self.skipTest(f"Vulkan hardware acceleration unavailable: {self.vulkan_reason}")
         output_video = os.path.join(self.work_dir, "vulkan_blend_out.mp4")
         status_file = os.path.join(self.work_dir, "vulkan_blend_status.json")
 
@@ -146,6 +152,8 @@ class TestVulkanAcceleration(unittest.TestCase):
 
     def test_05_vulkan_numerical_equivalence(self):
         """Verify that Vulkan GPU stitching is mathematically aligned with CPU v360 (MAE < 5.0)."""
+        if not self.vulkan_available:
+            self.skipTest(f"Vulkan hardware acceleration unavailable: {self.vulkan_reason}")
         import numpy as np
         from PIL import Image
 
