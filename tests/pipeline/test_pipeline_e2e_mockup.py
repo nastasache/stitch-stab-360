@@ -77,6 +77,44 @@ class TestPipelineE2EMockup(unittest.TestCase):
             f"Output video is empty: {self.output_video}"
         )
 
+    def test_pipeline_single_pass_stitch_and_nadir(self):
+        """Verify single-pass in-memory chaining of Stitch + Nadir when stabilization is disabled."""
+        out_single_pass = os.path.join(self.work_dir, "test_single_pass_nadir_out.mp4")
+        nadir_logo_path = os.path.join(REPO_ROOT, "data", "input", "nadir", "logo_generic.png")
+        if not os.path.exists(nadir_logo_path):
+            self.skipTest(f"Sample nadir logo not found: {nadir_logo_path}")
+
+        cmd = [
+            sys.executable, "-B", "scripts/pipeline.py",
+            "--input", self.input_video,
+            "--output", out_single_pass,
+            "--duration", "1",
+            "--preset", "ultrafast",
+            "--crf", "30",
+            "--nadir_logo", nadir_logo_path,
+            "--no_prompt_transforms",
+            "--status_file", self.status_file
+        ]
+
+        env = os.environ.copy()
+        env["PYTHONDONTWRITEBYTECODE"] = "1"
+
+        result = subprocess.run(
+            cmd,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=60
+        )
+
+        self.assertEqual(result.returncode, 0, f"Pipeline failed.\nStderr: {result.stderr}\nStdout: {result.stdout}")
+        self.assertTrue(os.path.exists(out_single_pass))
+        self.assertGreater(os.path.getsize(out_single_pass), 0)
+        self.assertIn("Single-Pass Step 1: Integrated Nadir logo", result.stdout)
+        self.assertIn("Skipping standalone Nadir overlay pass", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
+

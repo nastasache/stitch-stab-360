@@ -122,9 +122,11 @@ To minimize generational encoding loss across multiple stabilization passes, `pi
 * **Mode 4 (Hybrid Sequential Extraction + Single-Pass Master Render — Default)**:
   * Runs feature/motion extraction stages sequentially on lightweight fast intermediates or motion sidecars.
   * Binds all computed rotational matrices in $SO(3)$ space into a unified master rotation command.
-  * Executes a single, pristine master encode (including nadir branding) using NVENC or libx264.
+  * **Pristine RAW Master Render (`--master_from_raw`)**: Executes the final master encode directly from original camera sensor RAW frames in memory (`[raw] -> stitch -> sendcmd -> nadir -> [master]`), eliminating second-generation compression artifacts and bypassing intermediate disk re-reads.
 
-#### Smart Optimizations:
+#### In-Memory Filter Chaining & Storage Optimizations:
+* **Single-Pass Step 1 Chaining**: When stabilization is disabled or purely IMU-driven, Nadir logo branding is integrated directly into the Step 1 stitching filtergraph in memory, eliminating redundant intermediate video re-encodes and saving 5–15 GB of disk I/O.
+* **RAM Disk & TempFS Discovery (`utils/temp_storage.py`)**: Ephemeral optical flow `.trf` files, dynamic transform scripts, and seam masks are automatically directed to `/dev/shm` on Linux or `RAMDISK_PATH` on Windows, eliminating SSD write endurance wear and file-locking delays.
 * **Smart Stage Pruning**: Automatically analyzes each stage's computed motion. If peak rotation is $< 0.015^\circ$, the stage is identified as trivial/identity and zero-cost bypassed to avoid unneeded filtering.
 * **Slew-Rate Limiter**: Clamps single-frame counter-rotation velocity jumps exceeding $2.5^\circ/\text{frame}$ to eliminate visual whip-jerk tremors.
 * **Interactive Transform Selection Modal (`prompt_transforms`)**: In Modes 1 and 4, the pipeline pauses with `awaiting_transforms` before executing the master render. The user reviews diagnostic reports and toggles transforms in the Web UI modal. Enforces timestamp freshness (`mtime >= pause_start_ts - 2`) and job ID verification to prevent stale cached responses from bypassing the modal.

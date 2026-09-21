@@ -514,13 +514,35 @@ async def api_preview(request: Request):
     preview_file   = "data/runtime/temp/preview.png"
     temp_preview   = f"data/runtime/temp/prev_{os.getpid()}_{int(time.time()*1000)%100000}.png"
 
+    nadir_enabled = (str(gp("nadir_enabled", "0")) == "1" or str(gp("nadir_enabled", "")).lower() == "true")
+    nadir_logo_raw = resolve_nadir_logo(str(gp("nadir_logo", "logo_stei_circle.png"))) if nadir_enabled else None
+    has_nadir = bool(nadir_enabled and nadir_logo_raw and os.path.exists(nadir_logo_raw))
+    nadir_fov   = float(gp("nadir_fov", "75"))
+    nadir_fov_v = float(gp("nadir_fov_v", "75"))
+    nadir_filter_expr = f"format=rgba[logo_rgba];[logo_rgba]v360=input=flat:output=equirect:ih_fov={nadir_fov}:iv_fov={nadir_fov_v}:pitch=90:yaw=0:roll=0:w=3840:h=1920[logo_eq]"
+
     stitch_cmd = []
     if skip_stitching:
         if effective_yaw != 0.0 or pitch != 0.0 or roll != 0.0:
-            filter_complex = f"[0:v]v360=input=equirect:output=equirect:yaw={effective_yaw}:pitch={pitch}:roll={roll}[final]"
-            stitch_cmd = ["ffmpeg", "-y", "-i", frame_file, "-filter_complex", filter_complex, "-map", "[final]", "-vframes", "1", temp_preview]
+            if has_nadir:
+                filter_complex = (
+                    f"[0:v]v360=input=equirect:output=equirect:yaw={effective_yaw}:pitch={pitch}:roll={roll}[eq_base];"
+                    f"[1:v]{nadir_filter_expr};"
+                    f"[eq_base][logo_eq]overlay=0:0:format=auto[final]"
+                )
+                stitch_cmd = ["ffmpeg", "-y", "-i", frame_file, "-i", nadir_logo_raw, "-filter_complex", filter_complex, "-map", "[final]", "-vframes", "1", temp_preview]
+            else:
+                filter_complex = f"[0:v]v360=input=equirect:output=equirect:yaw={effective_yaw}:pitch={pitch}:roll={roll}[final]"
+                stitch_cmd = ["ffmpeg", "-y", "-i", frame_file, "-filter_complex", filter_complex, "-map", "[final]", "-vframes", "1", temp_preview]
         else:
-            stitch_cmd = ["ffmpeg", "-y", "-i", frame_file, "-vframes", "1", temp_preview]
+            if has_nadir:
+                filter_complex = (
+                    f"[1:v]{nadir_filter_expr};"
+                    f"[0:v][logo_eq]overlay=0:0:format=auto[final]"
+                )
+                stitch_cmd = ["ffmpeg", "-y", "-i", frame_file, "-i", nadir_logo_raw, "-filter_complex", filter_complex, "-map", "[final]", "-vframes", "1", temp_preview]
+            else:
+                stitch_cmd = ["ffmpeg", "-y", "-i", frame_file, "-vframes", "1", temp_preview]
     else:
         raw_blend_width  = int(float(gp("blend_width", "200")))
         max_overlap_deg  = max(0.0, ih_fov - 180.0)
@@ -563,8 +585,16 @@ async def api_preview(request: Request):
                 filter_complex += f"[right]v360=input=fisheye:output=equirect:ih_fov={ih_fov}:iv_fov={iv_fov}:yaw={yaw_r}:pitch={pitch}:roll={roll_r}:w=3840:h=1920[eq_right];"
                 filter_complex += f"[1:v]v360=input=equirect:output=equirect:yaw={effective_yaw}:pitch={pitch}:roll={roll},format=gray[mask_eq];"
                 filter_complex += "[eq_right][mask_eq]alphamerge[right_alpha];"
-                filter_complex += "[eq_left][right_alpha]overlay=format=yuv420[final]"
-                stitch_cmd = ["ffmpeg", "-y", "-i", frame_file, "-i", mask_file, "-filter_complex", filter_complex, "-map", "[final]", "-vframes", "1", temp_preview]
+                if has_nadir:
+                    filter_complex += (
+                        f"[eq_left][right_alpha]overlay=format=yuv420[stitch_out];"
+                        f"[2:v]{nadir_filter_expr};"
+                        f"[stitch_out][logo_eq]overlay=0:0:format=auto[final]"
+                    )
+                    stitch_cmd = ["ffmpeg", "-y", "-i", frame_file, "-i", mask_file, "-i", nadir_logo_raw, "-filter_complex", filter_complex, "-map", "[final]", "-vframes", "1", temp_preview]
+                else:
+                    filter_complex += "[eq_left][right_alpha]overlay=format=yuv420[final]"
+                    stitch_cmd = ["ffmpeg", "-y", "-i", frame_file, "-i", mask_file, "-filter_complex", filter_complex, "-map", "[final]", "-vframes", "1", temp_preview]
             else:
                 use_split_lenses = False
 
@@ -581,17 +611,23 @@ async def api_preview(request: Request):
                 filter_complex = f"[0:v]split[a][b];[a]crop=1920:1920:0:0,pad=1920:{pad_h}:0:{left_pad_y}:black,crop=1920:1920:0:{left_recrop_y}[left];[b]crop=1920:1920:1920:0[right];[left][right]hstack[combined];[combined]v360=input=dfisheye:output=equirect:ih_fov={ih_fov}:iv_fov={iv_fov}:yaw={yaw_dfisheye}:pitch={pitch}:roll={roll}[eq]"
             else:
                 filter_complex = f"[0:v]v360=input=dfisheye:output=equirect:ih_fov={ih_fov}:iv_fov={iv_fov}:yaw={yaw_dfisheye}:pitch={pitch}:roll={roll}[eq]"
-            stitch_cmd = ["ffmpeg", "-y", "-i", frame_file, "-filter_complex", filter_complex, "-map", "[eq]", "-vframes", "1", temp_preview]
+
+            if has_nadir:
+                filter_complex += (
+                    f";[1:v]{nadir_filter_expr};"
+                    f"[eq][logo_eq]overlay=0:0:format=auto[final]"
+                )
+                stitch_cmd = ["ffmpeg", "-y", "-i", frame_file, "-i", nadir_logo_raw, "-filter_complex", filter_complex, "-map", "[final]", "-vframes", "1", temp_preview]
+            else:
+                stitch_cmd = ["ffmpeg", "-y", "-i", frame_file, "-filter_complex", filter_complex, "-map", "[eq]", "-vframes", "1", temp_preview]
 
     cmd_text = subprocess.list2cmdline(stitch_cmd) if stitch_cmd else ""
     stdout, stderr = await run_async_subprocess(*stitch_cmd)
 
-    nadir_enabled = (str(gp("nadir_enabled", "0")) == "1" or str(gp("nadir_enabled", "")).lower() == "true")
-    if nadir_enabled and os.path.exists(temp_preview):
+    # Fallback secondary pass only if nadir was requested but could not be chained in single pass
+    if nadir_enabled and (not has_nadir) and os.path.exists(temp_preview):
         nadir_logo_raw = resolve_nadir_logo(str(gp("nadir_logo", "logo_stei_circle.png")))
         if nadir_logo_raw and os.path.exists(nadir_logo_raw):
-            nadir_fov   = float(gp("nadir_fov", "75"))
-            nadir_fov_v = float(gp("nadir_fov_v", "75"))
             nadir_temp_out = f"data/runtime/temp/nadir_{os.getpid()}_{int(time.time()*1000)%100000}.png"
             nadir_filter   = f"[1:v]format=rgba[logo_rgba];[logo_rgba]v360=input=flat:output=equirect:ih_fov={nadir_fov}:iv_fov={nadir_fov_v}:pitch=90:yaw=0:roll=0:w=3840:h=1920[logo_eq];[0:v][logo_eq]overlay=0:0:format=auto"
             nadir_cmd = ["ffmpeg", "-y", "-i", temp_preview, "-i", nadir_logo_raw, "-filter_complex", nadir_filter, "-vframes", "1", nadir_temp_out]

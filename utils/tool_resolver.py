@@ -150,7 +150,11 @@ def probe_vulkan(ffmpeg_bin: Optional[str] = None, force_refresh: bool = False) 
     Returns:
         Tuple[bool, str]: (is_operational, failure_reason)
     """
-    bin_target = str(ffmpeg_bin) if ffmpeg_bin else "ffmpeg"
+    if not ffmpeg_bin:
+        resolved = resolve_ffmpeg()
+        bin_target = resolved.get("path") or "ffmpeg"
+    else:
+        bin_target = str(ffmpeg_bin)
     cache_key = bin_target
     if not force_refresh and cache_key in _VULKAN_PROBE_CACHE:
         return _VULKAN_PROBE_CACHE[cache_key]
@@ -335,6 +339,8 @@ def resolve_ffmpeg() -> Dict[str, Any]:
     if best.get("nvenc", False):
         nvenc_operational, nvenc_reason = probe_nvenc(best["path"])
 
+    vulkan_operational, vulkan_reason = probe_vulkan(best["path"])
+
     return {
         "available": True,
         "path": best["path"],
@@ -343,6 +349,9 @@ def resolve_ffmpeg() -> Dict[str, Any]:
         "nvenc": best.get("nvenc", False),
         "nvenc_operational": nvenc_operational,
         "nvenc_reason": nvenc_reason,
+        "vulkan": True if vulkan_operational else False,
+        "vulkan_operational": vulkan_operational,
+        "vulkan_reason": vulkan_reason,
         "status": status,
         "message": msg,
         "candidates_found": [

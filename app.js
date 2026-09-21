@@ -4757,15 +4757,14 @@ async function showProceedConfirmation() {
     }
 
     const isHwaccel = (options?.ffmpeg_hwaccel && options.ffmpeg_hwaccel.checked) || false;
+    const isVulkanRequested = (options?.v360_vulkan && options.v360_vulkan.checked) || false;
+    const isVulkanApplicable = isStitchingEnabled && isVulkanRequested;
+    const stabQualityMode = (options?.stab_quality_mode && options.stab_quality_mode.value) ? String(options.stab_quality_mode.value) : '4';
+    const isMode3Lanczos = isVulkanApplicable && (stabQualityMode === '3');
     const ffmpegPreset = (options?.ffmpeg_preset && options.ffmpeg_preset.value) || String(APP_CONFIG.pipeline_defaults.ffmpeg_preset);
 
-    let hwText = `CPU (${ffmpegPreset})`;
-    let hwColor = '#fb923c';
-    let hwWarningAmber = false;
-    let hwTitle = '';
-
-    if (isHwaccel) {
-        let health = null;
+    let health = null;
+    if (isHwaccel || isVulkanApplicable) {
         try {
             if (typeof getSystemHealth === 'function') {
                 health = await getSystemHealth();
@@ -4775,21 +4774,61 @@ async function showProceedConfirmation() {
         } catch (_) {
             health = window.__systemHealthData || null;
         }
+    }
 
+    let hwText = `CPU (${ffmpegPreset})`;
+    let hwColor = '#fb923c';
+    let hwWarningAmber = false;
+    let hwTitle = '';
+
+    const activeAccels = [];
+    const titles = [];
+
+    if (isHwaccel) {
         const nvencOperational = health?.ffmpeg?.nvenc_operational;
         if (nvencOperational === false) {
-            hwText = 'GPU (NVENC) ⚠️ (CPU fallback)';
-            hwColor = '#fbbf24';
+            activeAccels.push('NVENC ⚠️ (CPU fallback)');
             hwWarningAmber = true;
             const reason = health?.ffmpeg?.nvenc_reason;
-            hwTitle = reason
+            titles.push(reason
                 ? `NVENC unavailable: ${reason}. Pipeline will automatically fall back to CPU (libx264).`
-                : 'NVENC hardware acceleration is unavailable on this system/container. Pipeline will automatically fall back to CPU (libx264).';
+                : 'NVENC hardware acceleration is unavailable on this system/container. Pipeline will automatically fall back to CPU (libx264).');
         } else {
-            hwText = 'GPU (NVENC)';
-            hwColor = '#34d399';
-            hwTitle = 'NVIDIA NVENC hardware acceleration operational.';
+            activeAccels.push('NVENC');
+            titles.push('NVIDIA NVENC hardware video encoding operational.');
         }
+    }
+
+    if (isVulkanApplicable) {
+        const vulkanOperational = health?.ffmpeg?.vulkan_operational;
+        if (isMode3Lanczos) {
+            activeAccels.push('Vulkan ℹ️ (Mode 3 CPU)');
+            titles.push('Vulkan compute acceleration bypassed for Phase 1 stitching because Quality Mode 3 (Lanczos) requires CPU v360.');
+        } else if (vulkanOperational === false) {
+            activeAccels.push('Vulkan ⚠️ (CPU fallback)');
+            hwWarningAmber = true;
+            const reason = health?.ffmpeg?.vulkan_reason;
+            titles.push(reason
+                ? `Vulkan unavailable: ${reason}. Stitching will automatically fall back to CPU v360.`
+                : 'Vulkan hardware acceleration is unavailable. Stitching will automatically fall back to CPU v360.');
+        } else {
+            activeAccels.push('Vulkan');
+            titles.push('Vulkan compute shader acceleration (v360_vulkan) active for Phase 1 stitching.');
+        }
+    }
+
+    if (activeAccels.length > 0) {
+        const hasGpu = activeAccels.some(a => !a.includes('CPU fallback') && !a.includes('Mode 3 CPU'));
+        hwText = hasGpu ? `GPU (${activeAccels.join(' + ')})` : activeAccels.join(' + ');
+        if (!isHwaccel) {
+            hwText += ` | CPU (${ffmpegPreset})`;
+        }
+        hwColor = hwWarningAmber ? '#fbbf24' : '#34d399';
+        hwTitle = titles.join(' ');
+    } else {
+        hwText = `CPU (${ffmpegPreset})`;
+        hwColor = '#fb923c';
+        hwTitle = 'Full CPU processing (libx264 encoding and CPU v360 projection).';
     }
     const est = estimatePipelineDuration();
 

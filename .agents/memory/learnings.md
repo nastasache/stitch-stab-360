@@ -19,3 +19,7 @@ Configured --duration as float in pipeline.py and routers/jobs.py to prevent tru
 
 ## [2026-09-21] Preserve Query Parameters in Client-Side Media Sanitizers
 Updated resolveVideoSrc in app.js and sanitizeMediaUrl in horizon_editor.html to cleanly extract and validate safe query strings (?t=timestamp cachebusters) before splitting path segments. Previously, non-alphanumeric replacement converted ?t= into _t_, causing 404 Not Found on intermediate video playback.
+
+
+## [2026-09-21] defusedxml Parser vs Standard XML Tree Builder
+defusedxml.ElementTree is designed solely for safe parsing and explicitly omits tree building factories such as Element and SubElement. Attempting to build XML DOM trees using defusedxml raises AttributeError: module 'defusedxml.ElementTree' has no attribute 'Element'. Construction of XML nodes (e.g. in GPX/KML exporters) must use standard xml.etree.ElementTree, reserving defusedxml strictly for untrusted input parsing.

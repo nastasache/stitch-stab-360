@@ -235,6 +235,11 @@ python -B scripts/pipeline.py --help
 ## ⚙️ Core Features & Architecture
 
 * **Dual-Fisheye Cropping & Remapping**: Custom FOV, yaw/pitch/roll orientation, anti-vignette shading, seam blending, and GPU-accelerated compute shaders via **Vulkan** (`--v360_backend=vulkan` with `v360_vulkan`).
+* **Memory & In-RAM Filter Chaining (Pristine Video Mastering)**:
+  * **Single-Pass Step 1 Chaining**: When stabilization is disabled or purely telemetry-driven, Stitching and Nadir branding are composed in a single FFmpeg filtergraph in RAM, eliminating 5–15 GB intermediate video files and redundant re-encodes.
+  * **Pristine RAW Master Rendering (`--master_from_raw`)**: Master render passes chain directly from original RAW sensor pixels in memory, eliminating second-generation compression loss and delivering pristine 1st-generation clarity.
+  * **RAM-Piped Web Previews**: Single-pass Stitch + Rotation + Nadir in memory (`/api/videos/preview`), eliminating intermediate PNG disk writes and reducing UI latency by ~50%.
+  * **TempFS & RAM Disk Integration**: Ephemeral `.trf` motion vector files and dynamic transform scripts automatically utilize `/dev/shm` on Linux or `RAMDISK_PATH` on Windows to eliminate SSD write wear.
 * **Auto-Calibration Engine**: Automated multi-frame alignment and horizon leveling via keypoint matching (ORB/AKAZE) and phase correlation with balanced, fast, and robust presets.
 * **Multi-Stage Cascade Stabilization Engine**:
   * **Execution Order Validation**: Dynamic Web UI and CLI validation safeguards against suboptimal method sequences (such as scheduling Horizon Leveling before hardware Telemetry), providing 1-click auto-fix and descriptive coordinate conflict warnings.

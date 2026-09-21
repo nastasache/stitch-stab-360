@@ -2915,7 +2915,12 @@ def main():
 
     # Nadir parameters
     step3_nadir = f"{out_base}_nadir{out_ext}"
-    target_temp_dir = out_dir if out_dir else os.path.join("data", "runtime", "temp")
+    nadir_applied_in_master = False
+    try:
+        from utils.temp_storage import get_ram_temp_dir
+        target_temp_dir = get_ram_temp_dir()
+    except Exception:
+        target_temp_dir = out_dir if out_dir else os.path.join("data", "runtime", "temp")
     os.makedirs(target_temp_dir, exist_ok=True)
     trf_file       = os.path.join(target_temp_dir, f"temp_transforms_{os.getpid()}.trf").replace('\\', '/')
 
@@ -3097,6 +3102,40 @@ def main():
                 "-filter_complex", filter_complex,
                 "-map", "[final]", "-map", "0:a?"
             ])
+
+            # Save raw stitch metadata for Master Render from RAW
+            raw_stitch_filter_expr = filter_complex
+            raw_stitch_is_split = True
+            raw_stitch_mask_file = mask_file
+            raw_stitch_cur_w = cur_w
+            raw_stitch_cur_h = cur_h
+
+            nadir_logo_step1 = args.nadir_logo.strip() if getattr(args, 'nadir_logo', None) else ""
+            can_chain_nadir_step1 = bool(
+                nadir_logo_step1 and os.path.exists(nadir_logo_step1)
+                and not getattr(args, 'input_has_nadir', False)
+                and not (args.stabilize and len(active_methods) > 0)
+            )
+            if can_chain_nadir_step1:
+                nadir_part = (
+                    f"[eq_left][right_alpha]overlay=format=yuv420:eof_action=endall:shortest=1[stitch_out];"
+                    f"[2:v]format=rgba[logo_rgba];"
+                    f"[logo_rgba]v360=input=flat:output=equirect:ih_fov={args.nadir_fov}:iv_fov={args.nadir_fov_v}:pitch=90:yaw=0:roll=0:w={cur_w}:h={cur_h}[logo_eq];"
+                    f"[stitch_out][logo_eq]overlay=0:0:format=auto:eof_action=pass:shortest=0[final]"
+                )
+                filter_complex_nadir = filter_complex.replace("[eq_left][right_alpha]overlay=format=yuv420:eof_action=endall:shortest=1[final]", nadir_part)
+                stitch_cmd = ["ffmpeg", "-y", "-progress", "-"]
+                if can_use_vulkan_stitch:
+                    stitch_cmd.extend(["-init_hw_device", "vulkan=vk", "-filter_hw_device", "vk"])
+                stitch_cmd.extend([
+                    "-i", current_file,
+                    "-loop", "1", "-i", mask_file,
+                    "-loop", "1", "-i", nadir_logo_step1,
+                    "-filter_complex", filter_complex_nadir,
+                    "-map", "[final]", "-map", "0:a?"
+                ])
+                nadir_applied_in_master = True
+                print(f"[Pipeline] Single-Pass Step 1: Integrated Nadir logo ({os.path.basename(nadir_logo_step1)}) directly into stitching filtergraph in memory.")
         else:
             yaw_dfisheye = float(args.yaw) + 180.0
             while yaw_dfisheye > 180: yaw_dfisheye -= 360
@@ -3164,6 +3203,42 @@ def main():
                 "-filter_complex", filter_complex,
                 "-map", "[eq]", "-map", "0:a?"
             ])
+
+            # Save raw stitch metadata for Master Render from RAW
+            raw_stitch_filter_expr = filter_complex
+            raw_stitch_is_split = False
+            raw_stitch_mask_file = None
+            raw_stitch_cur_w = cur_w
+            raw_stitch_cur_h = cur_h
+
+            nadir_logo_step1 = args.nadir_logo.strip() if getattr(args, 'nadir_logo', None) else ""
+            can_chain_nadir_step1 = bool(
+                nadir_logo_step1 and os.path.exists(nadir_logo_step1)
+                and not getattr(args, 'input_has_nadir', False)
+                and not (args.stabilize and len(active_methods) > 0)
+            )
+            if can_chain_nadir_step1:
+                nadir_part = (
+                    f"[eq_stitch];"
+                    f"[1:v]format=rgba[logo_rgba];"
+                    f"[logo_rgba]v360=input=flat:output=equirect:ih_fov={args.nadir_fov}:iv_fov={args.nadir_fov_v}:pitch=90:yaw=0:roll=0:w={cur_w}:h={cur_h}[logo_eq];"
+                    f"[eq_stitch][logo_eq]overlay=0:0:format=auto:eof_action=pass:shortest=0[final]"
+                )
+                if filter_complex.endswith("[eq]"):
+                    filter_complex_nadir = filter_complex[:-4] + nadir_part
+                else:
+                    filter_complex_nadir = filter_complex.replace("[eq]", nadir_part)
+                stitch_cmd = ["ffmpeg", "-y", "-progress", "-"]
+                if can_use_vulkan_stitch:
+                    stitch_cmd.extend(["-init_hw_device", "vulkan=vk", "-filter_hw_device", "vk"])
+                stitch_cmd.extend([
+                    "-i", current_file,
+                    "-loop", "1", "-i", nadir_logo_step1,
+                    "-filter_complex", filter_complex_nadir,
+                    "-map", "[final]", "-map", "0:a?"
+                ])
+                nadir_applied_in_master = True
+                print(f"[Pipeline] Single-Pass Step 1: Integrated Nadir logo ({os.path.basename(nadir_logo_step1)}) directly into stitching filtergraph in memory.")
 
         if is_image or getattr(args, 'remove_audio', False):
             clean_cmd = []
@@ -3254,7 +3329,7 @@ def main():
         "Kopf stabilization quality.\n"
     ) if any(m in active_methods for m in ('kopf',)) or getattr(args, 'stabilize_type', '') in ('kopf', 'telemetry_kopf', 'hybrid_kopf') else ""
     initial_raw_stitched_file = current_file
-    nadir_applied_in_master = False
+    nadir_applied_in_master = bool(locals().get('nadir_applied_in_master', False))
     q_mode = getattr(args, 'stab_quality_mode', '4')
     v360_interp = ":interp=lanczos" if q_mode == "3" else ""
     if args.stabilize and _input_is_equirect:

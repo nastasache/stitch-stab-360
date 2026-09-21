@@ -124,3 +124,11 @@ Accelerated Phase 1 split-lens seam blending with FFmpeg's v360_vulkan filter. C
 
 ## [2026-09-21] v360_vulkan Inverse Rotation Matrix Kinematics
 FFmpeg's v360_vulkan GLSL compute shader implements an inverse ray-marching coordinate transform relative to CPU v360. In CPU v360, forward rotations are applied with default rotation order ypr. In v360_vulkan, the inverse mapping causes positive Euler angles to rotate in the reverse direction and in reverse order. To achieve identical mathematical alignment with CPU v360, angles passed to v360_vulkan must be negated (yaw = -yaw, pitch = -pitch, roll = -roll) and the rotation order reversed (rorder = rpy). When calibrated, pixel MAE drops from 72.8 down to 1.64 across 4K dual-fisheye frames.
+
+
+## [2026-09-21] In-Memory Filter Chaining & Pristine RAW Mastering
+Eliminates multi-gigabyte intermediate disk I/O and generational compression loss by chaining Stitch, Stabilization, and Nadir directly in FFmpeg filter memory, rendering the final master pass directly from pristine camera sensor RAW input. Ephemeral .trf motion files route to RAM disk (/dev/shm or RAMDISK_PATH) to eliminate SSD write wear.
+
+
+## [2026-09-21] Mode 4 Hybrid Master Render Topology
+In Mode 4 Hybrid, intermediate stages compute 3D rotational trajectories (sendcmd files) and render fast P1 drafts for UI inspection. The Master Render must take initial_raw_stitched_file as input to reliably apply the composed trajectory and nadir overlay in a single 120 Mbps (NVENC P7 CQ 14 Lanczos) mastering pass, avoiding Vulkan hardware device reference conflicts from RAW.

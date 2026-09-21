@@ -18,7 +18,11 @@ import datetime
 import time
 import subprocess
 import shutil
-import defusedxml.ElementTree as ET
+import xml.etree.ElementTree as std_ET
+try:
+    import defusedxml.ElementTree as ET
+except ImportError:
+    ET = std_ET
 
 WIN_NO_WINDOW = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 
@@ -675,35 +679,35 @@ def build_gpx_xml(track_points, start_utc_dt):
     Returns:
         Formatted XML string representing GPX track.
     """
-    gpx = ET.Element("gpx", {
+    gpx = std_ET.Element("gpx", {
         "version": "1.1",
         "creator": "360 Gear StreetView Builder",
         "xmlns": "http://www.topografix.com/GPX/1/1"
     })
-    trk = ET.SubElement(gpx, "trk")
-    name = ET.SubElement(trk, "name")
+    trk = std_ET.SubElement(gpx, "trk")
+    name = std_ET.SubElement(trk, "name")
     name.text = "Google Street View Track"
-    trkseg = ET.SubElement(trk, "trkseg")
+    trkseg = std_ET.SubElement(trk, "trkseg")
 
     for pt in track_points:
         sec = pt['sec']
         pt_dt = start_utc_dt + datetime.timedelta(seconds=sec)
         iso_time = pt_dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
-        trkpt = ET.SubElement(trkseg, "trkpt", {
+        trkpt = std_ET.SubElement(trkseg, "trkpt", {
             "lat": f"{pt['lat']:.8f}",
             "lon": f"{pt['lon']:.8f}"
         })
         if 'ele' in pt and pt['ele'] is not None:
-            ele_el = ET.SubElement(trkpt, "ele")
+            ele_el = std_ET.SubElement(trkpt, "ele")
             ele_el.text = f"{pt['ele']:.3f}"
-        t_elem = ET.SubElement(trkpt, "time")
+        t_elem = std_ET.SubElement(trkpt, "time")
         t_elem.text = iso_time
 
     # Pretty print XML
-    ET.indent(gpx, space="  ")
+    std_ET.indent(gpx, space="  ")
     xml_header = '<?xml version="1.0" encoding="UTF-8"?>\n'
-    return xml_header + ET.tostring(gpx, encoding="unicode")
+    return xml_header + std_ET.tostring(gpx, encoding="unicode")
 
 def build_map_html(track_points, start_utc_dt, output_html_path, title_name="Google Street View Route", title=None):
     """Generate standalone interactive Leaflet HTML map visualizing the Street View route.

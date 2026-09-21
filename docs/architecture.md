@@ -85,9 +85,14 @@ The backend is built with **FastAPI** running on **Uvicorn**, organized into dom
   - `/assets` -> `assets/` (self-hosted fonts, favicon, and frontend resources).
 - Custom video headers (`Accept-Ranges: bytes`) ensure smooth HTML5 video seeking in preview players.
 
-### 4. Automated Testing & Continuous Verification
-- **Unit & Endpoint Suite**: 42 automated tests covering API endpoints, parameter parsing, path traversal defenses, math transforms, telemetry parser, and presets.
-- **Mockup End-to-End Testing**: `tests/pipeline/test_pipeline_e2e_mockup.py` renders a 1-second synthetic dual-fisheye clip conforming to the repo's max 2-second testing limit, runs the pipeline CLI, validates equirectangular MP4 generation, and cleans up all temporary fixtures.
+### 4. In-Memory Filter Chaining & Storage Optimization
+- **Single-Pass Web Preview Chaining (`routers/videos.py`)**: Merges Stitching, Orientation adjustment (Yaw/Pitch/Roll), and Nadir logo branding into a single FFmpeg filtergraph in RAM, eliminating multiple process launches and intermediate PNG disk writes.
+- **Pristine RAW Master Rendering (`scripts/pipeline.py`)**: The final mastering pass (`--master_from_raw`) chains Stitching, Cumulative Trajectory Stabilization (`sendcmd`), and Nadir branding directly from the original camera sensor RAW input in memory, eliminating second-generation compression loss and reducing disk I/O bottlenecks.
+- **Centralized RAM Disk & TempFS Discovery (`utils/temp_storage.py`)**: Automatically routes ephemeral motion vector files (`.trf`), dynamic transform scripts, and seam masks to `/dev/shm` on Linux or `RAMDISK_PATH` on Windows, completely eliminating SSD write endurance wear while strictly adhering to the repository's Absolute No-Deletion Policy.
+
+### 5. Automated Testing & Continuous Verification
+- **Unit & Endpoint Suite**: Comprehensive automated test suites covering API endpoints, parameter parsing, path traversal defenses, math transforms, telemetry parser, temp storage resolver, and presets.
+- **Mockup End-to-End Testing**: `tests/pipeline/test_pipeline_e2e_mockup.py` renders synthetic dual-fisheye mockup clips (strictly $\le 2$ seconds), validating end-to-end pipeline execution and single-pass Stitch + Nadir integration.
 
 
 ---
