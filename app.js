@@ -4488,8 +4488,10 @@ function estimatePipelineDuration() {
     }
 
     const isHwaccel = (options?.ffmpeg_hwaccel && options.ffmpeg_hwaccel.checked) || false;
+    const isVulkanRequested = (options?.v360_vulkan && options.v360_vulkan.checked) || document.getElementById('v360_vulkan')?.checked || false;
     const enableStitchingCb = document.getElementById('enable_stitching');
     const skipStitching = enableStitchingCb && !enableStitchingCb.checked;
+    const isVulkanApplicable = !skipStitching && isVulkanRequested;
     const isStabilize = cb('stabilize') === '1';
     const isBlend = cb('blend_seams') === '1';
     const isAntiVignette = cb('anti_vignette') === '1';
@@ -4516,11 +4518,16 @@ function estimatePipelineDuration() {
 
     // 1. Base dual-fisheye stitching pass + telemetry embed + immediate spatial metadata
     if (!skipStitching) {
-        const baseStitchSecPerSec = isHwaccel ? 2.9 : (5.5 * presetMult);
+        let baseStitchSecPerSec = 5.5 * presetMult;
+        if (isVulkanApplicable && qMode !== '3') {
+            baseStitchSecPerSec = 1.6;
+        } else if (isHwaccel) {
+            baseStitchSecPerSec = 2.6;
+        }
         let stitchTime = dur * baseStitchSecPerSec;
-        if (isBlend) stitchTime *= 1.20;
+        if (isBlend) stitchTime *= 1.15;
         if (isAntiVignette) stitchTime *= 1.10;
-        totalEstSec += 9.0 + stitchTime;
+        totalEstSec += 6.0 + stitchTime;
     }
 
     // 2. Multi-stage stabilization passes
@@ -4536,34 +4543,37 @@ function estimatePipelineDuration() {
 
         // Python feature extraction & tracking analysis passes
         let stabAnalysisSec = 0;
-        if (activeStabList.includes('telemetry')) stabAnalysisSec += 3.0 + dur * 0.05;
-        if (activeStabList.includes('kopf'))      stabAnalysisSec += 6.0 + dur * 2.2;  // 6 cubemap face optical flow
-        if (activeStabList.includes('kabsch'))    stabAnalysisSec += 4.0 + dur * 1.3;  // Spherical grid SVD solve
-        if (activeStabList.includes('vidstab'))   stabAnalysisSec += 8.0 + dur * 4.9;  // Vidstab optical flow
-        if (activeStabList.includes('cinematic')) stabAnalysisSec += 3.0 + dur * 0.2;  // L1-norm SO(3) optimization
+        if (activeStabList.includes('telemetry')) stabAnalysisSec += 2.0 + dur * 0.05;
+        if (activeStabList.includes('kopf'))      stabAnalysisSec += 5.0 + dur * 1.9;  // 6 cubemap face optical flow
+        if (activeStabList.includes('kabsch'))    stabAnalysisSec += 3.0 + dur * 1.2;  // Spherical grid SVD solve
+        if (activeStabList.includes('vidstab'))   stabAnalysisSec += 6.0 + dur * 4.5;  // Vidstab optical flow
+        if (activeStabList.includes('cinematic')) stabAnalysisSec += 2.0 + dur * 0.15; // L1-norm SO(3) optimization
         if (activeStabList.includes('horizon'))   stabAnalysisSec += 2.0 + dur * 0.1;  // Horizon auto-detection
         if (activeStabList.includes('traveldir')) stabAnalysisSec += 1.5 + dur * 0.08; // Direction lock dampening
         totalEstSec += stabAnalysisSec;
 
         // In Mode 4 (Hybrid) or Mode 0/2: Each active stabilization method performs an intermediate video encode + 360 metadata injection
+        // Accelerated by RAM disk temporary storage and NVENC P1 draft encoding
         const hasIntermediateRenders = (qMode === '4' || qMode === '0' || qMode === '2');
         if (hasIntermediateRenders && activeStabList.length > 0) {
-            const intermediateRenderSecPerSec = isHwaccel ? 25.5 : (45.0 * presetMult);
+            const intermediateRenderSecPerSec = isHwaccel ? 19.5 : (38.0 * presetMult);
             const numIntermediateRenders = activeStabList.length;
-            totalEstSec += (numIntermediateRenders * 10.0) + (numIntermediateRenders * dur * intermediateRenderSecPerSec);
+            totalEstSec += (numIntermediateRenders * 8.0) + (numIntermediateRenders * dur * intermediateRenderSecPerSec);
         }
 
         if (activeStabList.length > 0) {
             // Master Composition Render (with Lanczos resampling & P7 NVENC / high quality)
             const isLanczos = (qMode === '4' || qMode === '3');
-            const masterBaseSec = isLanczos ? 135.0 : 15.0;
-            const masterRenderSecPerSec = isHwaccel ? (isLanczos ? 95.0 : 25.0) : (isLanczos ? 160.0 : 50.0 * presetMult);
+            const masterBaseSec = isLanczos ? 40.0 : 15.0;
+            const masterRenderSecPerSec = isHwaccel
+                ? (isLanczos ? 40.0 : 18.0)
+                : ((isLanczos ? 100.0 : 45.0) * presetMult);
             totalEstSec += masterBaseSec + (dur * masterRenderSecPerSec);
         }
     }
 
-    // 3. Nadir overlay (if not already merged into master composition)
-    if (isNadir && !isStabilize) {
+    // 3. Nadir overlay (standalone pass only if stitching was skipped or stabilization disabled)
+    if (isNadir && !isStabilize && skipStitching) {
         totalEstSec += 5.0 + (isHwaccel ? (dur * 0.3) : (dur * 0.8));
     }
 
@@ -4571,9 +4581,9 @@ function estimatePipelineDuration() {
     if (isStreetView) {
         if (streetViewAutoPad && dur < 120) {
             // Padded to 126.0s (minimum 2 minutes for Street View)
-            totalEstSec += 32.0;
+            totalEstSec += 45.0;
         } else {
-            totalEstSec += 10.0 + (dur * 0.3);
+            totalEstSec += 10.0 + (dur * 0.35);
         }
     }
 
