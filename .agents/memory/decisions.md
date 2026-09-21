@@ -104,3 +104,11 @@ Remediated final 8 Code Scanning alerts across Python and JavaScript: replaced n
 ## [2026-09-20] CodeQL Zero-Alert Remediation: URL Redirection and Command Argument Taint
 Resolved the final 2 remaining Code Scanning alerts repository-wide (py/command-line-injection Alert #164 and js/client-side-unvalidated-url-redirection Alert #202). In routers/common.py and routers/jobs.py, eliminated command argument taint propagation by strictly matching input files against directory entries via os.scandir (dropping untrusted parent directory relative path derivation), reconstructing output stems and job IDs using pure integer charcode primitives (ord/chr) with dictionary extension allowlists, and auto-generating execution job IDs via uuid.uuid4().hex. In horizon_editor.html, sanitized media URL paths using String.fromCharCode code-point reconstruction, concatenated safe path prefixes ('/data/', '/samples/') via binary addition to satisfy CodeQL's hasHostnameSanitizingSubstring pattern, and wrapped video.src assignment inside affirmative HostnameSanitizerGuard barrier checks.
 
+
+
+## [2026-09-21] Missing re import in routers/videos.py
+api_crop_video uses re.sub for sanitizing target output filenames; missing import re caused NameError on video crop requests.
+
+
+## [2026-09-21] Missing BASE_DIR import in routers/videos.py
+api_crop_video and api_generate_preview reference BASE_DIR for path resolution and boundary verification; imported BASE_DIR from config.settings.

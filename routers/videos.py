@@ -4,6 +4,7 @@ os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
 
 """Video operations, calibration, leveling, frame extraction, and preview rendering routes."""
 
+import re
 import json
 import time
 import shutil
@@ -13,6 +14,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import JSONResponse
 
+from config.settings import BASE_DIR
 from routers.common import (
     resolve_input_file,
     resolve_output_file,
