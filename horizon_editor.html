@@ -1079,6 +1079,10 @@
           <input type="number" id="inputFrame" value="0" min="0" style="width:70px;">
         </div>
         <div style="display:flex; align-items:center; gap:4px;">
+          <span>Time:</span>
+          <input type="text" id="inputTime" value="00:00:00" placeholder="00:00:00" style="width:75px; text-align:center;" title="Type time (HH:MM:SS) and press Enter to seek">
+        </div>
+        <div style="display:flex; align-items:center; gap:4px;">
           <span>FPS:</span>
           <input type="number" id="inputFps" value="29.97" step="0.01" style="width:65px;">
         </div>
@@ -1481,6 +1485,7 @@
     const timelineKeyframes = document.getElementById('timelineKeyframes');
     const timecodeDisplay = document.getElementById('timecodeDisplay');
     const inputFrame = document.getElementById('inputFrame');
+    const inputTime = document.getElementById('inputTime');
     const inputFps = document.getElementById('inputFps');
     const btnPlayPause = document.getElementById('btnPlayPause');
     const selPlaybackRate = document.getElementById('selPlaybackRate');
@@ -2093,6 +2098,30 @@
     if (btnLast) btnLast.addEventListener('click', () => seekToFrame(state.totalFrames > 0 ? state.totalFrames - 1 : 0));
 
     inputFrame.addEventListener('change', (e) => seekToFrame(parseInt(e.target.value) || 0));
+    inputFrame.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        seekToFrame(parseInt(e.target.value) || 0);
+        inputFrame.blur();
+      }
+    });
+
+    if (inputTime) {
+      function doSeekTime() {
+        const sec = parseTimeHMS(inputTime.value);
+        if (sec !== null && sec >= 0) {
+          seekToFrame(Math.round(sec * state.fps));
+        }
+      }
+      inputTime.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          doSeekTime();
+          inputTime.blur();
+        }
+      });
+      inputTime.addEventListener('change', doSeekTime);
+    }
     inputFps.addEventListener('change', (e) => {
       state.fps = parseFloat(e.target.value) || 29.97;
       if (video.duration) {
@@ -2115,6 +2144,30 @@
       return `${String(mins).padStart(2, '0')}:${String(secs).padStart(6, '0')}`;
     }
 
+    function formatTimeHMS(secs) {
+      if (secs === null || secs === undefined || isNaN(secs) || secs < 0) return '00:00:00';
+      const totalSecs = Math.floor(secs);
+      const h = Math.floor(totalSecs / 3600);
+      const m = Math.floor((totalSecs % 3600) / 60);
+      const s = Math.floor(totalSecs % 60);
+      const pad = (num) => String(num).padStart(2, '0');
+      return `${pad(h)}:${pad(m)}:${pad(s)}`;
+    }
+
+    function parseTimeHMS(str) {
+      if (!str || typeof str !== 'string') return null;
+      const parts = str.trim().split(':').map(p => parseFloat(p.trim()));
+      if (parts.length === 0 || parts.some(isNaN)) return null;
+      if (parts.length === 3) {
+        return Math.max(0, parts[0] * 3600 + parts[1] * 60 + parts[2]);
+      } else if (parts.length === 2) {
+        return Math.max(0, parts[0] * 60 + parts[1]);
+      } else if (parts.length === 1) {
+        return Math.max(0, parts[0]);
+      }
+      return null;
+    }
+
     function updateTimelineUI() {
       const curTime = state.currentFrame / state.fps;
       const totalTime = (state.totalFrames - 1) / state.fps;
@@ -2123,6 +2176,9 @@
       hudTime.textContent = formatTime(curTime);
       timecodeDisplay.textContent = `${formatTime(curTime)} / ${formatTime(totalTime || 0)}`;
       inputFrame.value = state.currentFrame;
+      if (inputTime && document.activeElement !== inputTime) {
+        inputTime.value = formatTimeHMS(curTime);
+      }
 
       const pct = state.totalFrames > 1 ? (state.currentFrame / (state.totalFrames - 1)) * 100 : 0;
       timelineProgress.style.width = `${pct}%`;

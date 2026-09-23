@@ -5471,6 +5471,7 @@ function updateVRTimeDisplay() {
         vrTimeDisplay.textContent = `${formatTime(cur)} / ${formatTime(dur)} (Frame ${curF} / ${durF})`;
     }
     updateGotoFrameInputValue('vr-goto-frame', curF);
+    updateGotoTimeInputValue('vr-goto-time', cur);
 }
 
 function formatTime(secs) {
@@ -6930,6 +6931,7 @@ function updateVRStitchedTimeDisplay() {
         vrStitchedTimeDisplay.textContent = `${formatTime(cur)} / ${formatTime(dur)} (Frame ${curF} / ${durF})`;
     }
     updateGotoFrameInputValue('vr-stitched-goto-frame', curF);
+    updateGotoTimeInputValue('vr-stitched-goto-time', cur);
 }
 
 let isStitchedVRControlsInitialized = false;
@@ -7582,6 +7584,7 @@ function updateTelemetryTimeDisplay() {
         display.textContent = `${formatTime(cur)} / ${formatTime(dur)} (Frame ${curF} / ${durF})`;
     }
     updateGotoFrameInputValue('vr-telemetry-goto-frame', curF);
+    updateGotoTimeInputValue('vr-telemetry-goto-time', cur);
 }
 
 function updateKabschTimeDisplay() {
@@ -7596,6 +7599,7 @@ function updateKabschTimeDisplay() {
         display.textContent = `${formatTime(cur)} / ${formatTime(dur)} (Frame ${curF} / ${durF})`;
     }
     updateGotoFrameInputValue('vr-kabsch-goto-frame', curF);
+    updateGotoTimeInputValue('vr-kabsch-goto-time', cur);
 }
 
 function updateKopfTimeDisplay() {
@@ -7610,6 +7614,7 @@ function updateKopfTimeDisplay() {
         display.textContent = `${formatTime(cur)} / ${formatTime(dur)} (Frame ${curF} / ${durF})`;
     }
     updateGotoFrameInputValue('vr-kopf-goto-frame', curF);
+    updateGotoTimeInputValue('vr-kopf-goto-time', cur);
 }
 
 function updateVidstabTimeDisplay() {
@@ -7624,6 +7629,7 @@ function updateVidstabTimeDisplay() {
         display.textContent = `${formatTime(cur)} / ${formatTime(dur)} (Frame ${curF} / ${durF})`;
     }
     updateGotoFrameInputValue('vr-vidstab-goto-frame', curF);
+    updateGotoTimeInputValue('vr-vidstab-goto-time', cur);
 }
 const updateOpticalTimeDisplay = updateVidstabTimeDisplay;
 
@@ -7639,6 +7645,7 @@ function updateCinematicTimeDisplay() {
         display.textContent = `${formatTime(cur)} / ${formatTime(dur)} (Frame ${curF} / ${durF})`;
     }
     updateGotoFrameInputValue('vr-cinematic-goto-frame', curF);
+    updateGotoTimeInputValue('vr-cinematic-goto-time', cur);
 }
 
 let isKabschVRControlsInitialized = false;
@@ -8490,6 +8497,7 @@ function updateHorizonTimeDisplay() {
     const el = document.getElementById('vr-horizon-time-display');
     if (el) el.textContent = `${formatTime(cur)} / ${formatTime(dur)} (Frame ${curF} / ${durF})`;
     updateGotoFrameInputValue('vr-horizon-goto-frame', curF);
+    updateGotoTimeInputValue('vr-horizon-goto-time', cur);
 }
 const updateCheckpointsTimeDisplay = updateHorizonTimeDisplay;
 
@@ -8503,6 +8511,7 @@ function updateTraveldirTimeDisplay() {
     const el = document.getElementById('vr-traveldir-time-display');
     if (el) el.textContent = `${formatTime(cur)} / ${formatTime(dur)} (Frame ${curF} / ${durF})`;
     updateGotoFrameInputValue('vr-traveldir-goto-frame', curF);
+    updateGotoTimeInputValue('vr-traveldir-goto-time', cur);
 }
 
 function updateOrigTimeDisplay() {
@@ -8518,6 +8527,7 @@ function updateOrigTimeDisplay() {
         origTimeDisplay.textContent = `${formatTime(cur)} / ${formatTime(dur)} (Frame ${curF} / ${durF})`;
     }
     updateGotoFrameInputValue('orig-goto-frame', curF);
+    updateGotoTimeInputValue('orig-goto-time', cur);
 }
 
 function toggleSyncPlay() {
@@ -9164,6 +9174,30 @@ function zoomContainer(camera, fovEl, delta) {
     }
 }
 
+function formatTimeHMS(secs) {
+    if (secs === null || secs === undefined || isNaN(secs) || secs < 0) return '00:00:00';
+    const totalSecs = Math.floor(secs);
+    const h = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const s = Math.floor(totalSecs % 60);
+    const pad = (num) => String(num).padStart(2, '0');
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+
+function parseTimeHMS(str) {
+    if (!str || typeof str !== 'string') return null;
+    const parts = str.trim().split(':').map(p => parseFloat(p.trim()));
+    if (parts.length === 0 || parts.some(isNaN)) return null;
+    if (parts.length === 3) {
+        return Math.max(0, parts[0] * 3600 + parts[1] * 60 + parts[2]);
+    } else if (parts.length === 2) {
+        return Math.max(0, parts[0] * 60 + parts[1]);
+    } else if (parts.length === 1) {
+        return Math.max(0, parts[0]);
+    }
+    return null;
+}
+
 function updateGotoFrameInputValue(inputId, curFrame) {
     const el = document.getElementById(inputId);
     if (el && document.activeElement !== el) {
@@ -9171,7 +9205,14 @@ function updateGotoFrameInputValue(inputId, curFrame) {
     }
 }
 
-function bindGotoFrameInput(inputId, videoEl) {
+function updateGotoTimeInputValue(inputId, curSec) {
+    const el = document.getElementById(inputId);
+    if (el && document.activeElement !== el) {
+        el.value = formatTimeHMS(curSec);
+    }
+}
+
+function bindGotoFrameInput(inputId, videoEl, timeInputId = null) {
     const inputEl = document.getElementById(inputId);
     if (!inputEl) return;
 
@@ -9180,6 +9221,13 @@ function bindGotoFrameInput(inputId, videoEl) {
         if (isNaN(frameVal) || frameVal < 0) return;
         const fps = currentVideoMeta.fps || 30.0;
         const targetSec = frameVal / fps;
+
+        if (timeInputId) {
+            const timeEl = document.getElementById(timeInputId);
+            if (timeEl && document.activeElement !== timeEl) {
+                timeEl.value = formatTimeHMS(targetSec);
+            }
+        }
 
         if (isAnyPopupOpen()) {
             syncSeekToTime(targetSec);
@@ -9212,17 +9260,88 @@ function bindGotoFrameInput(inputId, videoEl) {
     });
 }
 
+function bindGotoTimeInput(timeInputId, frameInputId, videoEl) {
+    const inputEl = document.getElementById(timeInputId);
+    if (!inputEl) return;
+
+    function doSeek() {
+        const targetSec = parseTimeHMS(inputEl.value);
+        if (targetSec === null || targetSec < 0) return;
+        const fps = currentVideoMeta.fps || 30.0;
+        const maxDur = (videoEl && isFinite(videoEl.duration) && videoEl.duration > 0) ? videoEl.duration : Infinity;
+        const clampedSec = Math.max(0, Math.min(maxDur, targetSec));
+        const targetFrame = Math.round(clampedSec * fps);
+
+        if (frameInputId) {
+            const frameEl = document.getElementById(frameInputId);
+            if (frameEl && document.activeElement !== frameEl) {
+                frameEl.value = targetFrame;
+            }
+        }
+        if (document.activeElement !== inputEl) {
+            inputEl.value = formatTimeHMS(clampedSec);
+        }
+
+        if (isAnyPopupOpen()) {
+            syncSeekToTime(clampedSec);
+        } else if (videoEl) {
+            videoEl.currentTime = clampedSec;
+            updateVRTimeDisplay();
+            updateVRStitchedTimeDisplay();
+            updateTelemetryTimeDisplay();
+            updateKopfTimeDisplay();
+            updateKabschTimeDisplay();
+            updateVidstabTimeDisplay();
+            updateHorizonTimeDisplay();
+            updateCinematicTimeDisplay();
+            updateTraveldirTimeDisplay();
+            updateOrigTimeDisplay();
+        }
+    }
+
+    inputEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            doSeek();
+            inputEl.blur();
+        }
+    });
+
+    inputEl.addEventListener('change', () => {
+        doSeek();
+    });
+}
+
 function initAllGotoFrameInputs() {
-    bindGotoFrameInput('orig-goto-frame', originalVideo);
-    bindGotoFrameInput('vr-stitched-goto-frame', videoStitched);
-    bindGotoFrameInput('vr-telemetry-goto-frame', videoTelemetry);
-    bindGotoFrameInput('vr-kopf-goto-frame', videoKopf);
-    bindGotoFrameInput('vr-kabsch-goto-frame', videoKabsch);
-    bindGotoFrameInput('vr-vidstab-goto-frame', videoVidstab);
-    bindGotoFrameInput('vr-horizon-goto-frame', videoHorizon);
-    bindGotoFrameInput('vr-cinematic-goto-frame', videoCinematic);
-    bindGotoFrameInput('vr-traveldir-goto-frame', videoTraveldir);
-    bindGotoFrameInput('vr-goto-frame', video360);
+    bindGotoFrameInput('orig-goto-frame', originalVideo, 'orig-goto-time');
+    bindGotoTimeInput('orig-goto-time', 'orig-goto-frame', originalVideo);
+
+    bindGotoFrameInput('vr-stitched-goto-frame', videoStitched, 'vr-stitched-goto-time');
+    bindGotoTimeInput('vr-stitched-goto-time', 'vr-stitched-goto-frame', videoStitched);
+
+    bindGotoFrameInput('vr-telemetry-goto-frame', videoTelemetry, 'vr-telemetry-goto-time');
+    bindGotoTimeInput('vr-telemetry-goto-time', 'vr-telemetry-goto-frame', videoTelemetry);
+
+    bindGotoFrameInput('vr-kopf-goto-frame', videoKopf, 'vr-kopf-goto-time');
+    bindGotoTimeInput('vr-kopf-goto-time', 'vr-kopf-goto-frame', videoKopf);
+
+    bindGotoFrameInput('vr-kabsch-goto-frame', videoKabsch, 'vr-kabsch-goto-time');
+    bindGotoTimeInput('vr-kabsch-goto-time', 'vr-kabsch-goto-frame', videoKabsch);
+
+    bindGotoFrameInput('vr-vidstab-goto-frame', videoVidstab, 'vr-vidstab-goto-time');
+    bindGotoTimeInput('vr-vidstab-goto-time', 'vr-vidstab-goto-frame', videoVidstab);
+
+    bindGotoFrameInput('vr-horizon-goto-frame', videoHorizon, 'vr-horizon-goto-time');
+    bindGotoTimeInput('vr-horizon-goto-time', 'vr-horizon-goto-frame', videoHorizon);
+
+    bindGotoFrameInput('vr-cinematic-goto-frame', videoCinematic, 'vr-cinematic-goto-time');
+    bindGotoTimeInput('vr-cinematic-goto-time', 'vr-cinematic-goto-frame', videoCinematic);
+
+    bindGotoFrameInput('vr-traveldir-goto-frame', videoTraveldir, 'vr-traveldir-goto-time');
+    bindGotoTimeInput('vr-traveldir-goto-time', 'vr-traveldir-goto-frame', videoTraveldir);
+
+    bindGotoFrameInput('vr-goto-frame', video360, 'vr-goto-time');
+    bindGotoTimeInput('vr-goto-time', 'vr-goto-frame', video360);
 }
 
 function updatePreviewFrameDisplay(frameVal, secVal = null) {
@@ -9235,6 +9354,7 @@ function updatePreviewFrameDisplay(frameVal, secVal = null) {
 
     const sideInput = document.getElementById('preview-frame-input');
     const overlayInput = document.getElementById('preview-goto-frame');
+    const overlayTimeInput = document.getElementById('preview-goto-time');
     const sideLbl = document.getElementById('preview-frame-time-lbl');
     const timeDisplay = document.getElementById('preview-time-display');
     const frameSlider = document.getElementById('preview-frame-slider');
@@ -9246,6 +9366,9 @@ function updatePreviewFrameDisplay(frameVal, secVal = null) {
     if (overlayInput) {
         if (totalFrames > 0) overlayInput.max = totalFrames;
         if (parseInt(overlayInput.value) !== frameVal) overlayInput.value = frameVal;
+    }
+    if (overlayTimeInput && document.activeElement !== overlayTimeInput) {
+        overlayTimeInput.value = formatTimeHMS(secVal);
     }
     if (frameSlider) {
         if (totalFrames > 0) frameSlider.max = totalFrames;
@@ -9309,6 +9432,27 @@ function initPreviewFrameControls() {
         });
         overlayInput.addEventListener('change', () => {
             setPreviewFrame(parseInt(overlayInput.value) || 0);
+        });
+    }
+
+    const overlayTimeInput = document.getElementById('preview-goto-time');
+    if (overlayTimeInput) {
+        function doSeekPreviewTime() {
+            const secVal = parseTimeHMS(overlayTimeInput.value);
+            if (secVal !== null && secVal >= 0) {
+                const fps = currentVideoMeta.fps || 30.0;
+                setPreviewFrame(Math.round(secVal * fps));
+            }
+        }
+        overlayTimeInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                doSeekPreviewTime();
+                overlayTimeInput.blur();
+            }
+        });
+        overlayTimeInput.addEventListener('change', () => {
+            doSeekPreviewTime();
         });
     }
 

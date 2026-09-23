@@ -132,3 +132,7 @@ Eliminates multi-gigabyte intermediate disk I/O and generational compression los
 
 ## [2026-09-21] Mode 4 Hybrid Master Render Topology
 In Mode 4 Hybrid, intermediate stages compute 3D rotational trajectories (sendcmd files) and render fast P1 drafts for UI inspection. The Master Render must take initial_raw_stitched_file as input to reliably apply the composed trajectory and nadir overlay in a single 120 Mbps (NVENC P7 CQ 14 Lanczos) mastering pass, avoiding Vulkan hardware device reference conflicts from RAW.
+
+
+## [2026-09-23] Synchronized HH:MM:SS Time Inputs
+Added synchronized HH:MM:SS time input alongside frame number inputs across all 11 viewer containers and horizon editor with bidirectional seeking and lockstep updates.

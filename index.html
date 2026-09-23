@@ -744,6 +744,10 @@
                                     <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Frame:</span>
                                     <input type="number" id="orig-goto-frame" min="0" placeholder="Go to" title="Type frame number and press Enter to seek" style="width: 80px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
                                 </div>
+                                <div class="vr-goto-time-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to time (HH:MM:SS)">
+                                    <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Time:</span>
+                                    <input type="text" id="orig-goto-time" placeholder="00:00:00" title="Type time (HH:MM:SS) and press Enter to seek" style="width: 76px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
+                                </div>
                                 
                                 <!-- 2D / 360 Toggle Button -->
                                 <button id="orig-toggle-vr" class="vr-control-btn" type="button" title="Toggle 2D / 360 Spherical View" style="margin-left: 2px; font-size: 0.75rem; padding: 2px 7px; font-weight: 600; color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; display: inline-flex; align-items: center; gap: 3px;"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span id="orig-toggle-vr-text">360</span></button>
@@ -808,6 +812,8 @@
                                 <div style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px; color: #cbd5e1; font-size: 0.8rem;" title="Jump to frame number">
                                     <span style="font-size: 0.78rem; white-space: nowrap;">Frame</span>
                                     <input type="number" id="preview-goto-frame" min="0" value="0" placeholder="0" title="Type frame number and press Enter to update preview" style="width: 80px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
+                                    <span style="font-size: 0.78rem; white-space: nowrap; margin-left: 2px;">Time</span>
+                                    <input type="text" id="preview-goto-time" placeholder="00:00:00" title="Type time (HH:MM:SS) and press Enter to update preview" style="width: 76px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
                                     <span id="preview-time-display" class="vr-time-text" style="font-size: 0.78rem; color: #cbd5e1;">/ 0 (0:00 / 0:00)</span>
                                 </div>
                             </div>
@@ -841,6 +847,10 @@
                                 <div class="vr-goto-frame-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to frame number">
                                     <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Frame:</span>
                                     <input type="number" id="vr-stitched-goto-frame" min="0" placeholder="Go to" title="Type frame number and press Enter to seek" style="width: 80px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
+                                </div>
+                                <div class="vr-goto-time-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to time (HH:MM:SS)">
+                                    <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Time:</span>
+                                    <input type="text" id="vr-stitched-goto-time" placeholder="00:00:00" title="Type time (HH:MM:SS) and press Enter to seek" style="width: 76px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
                                 </div>
                                 
                                 <!-- 2D / 360 Toggle Button -->
@@ -899,6 +909,10 @@
                                     <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Frame:</span>
                                     <input type="number" id="vr-telemetry-goto-frame" min="0" placeholder="Go to" title="Type frame number and press Enter to seek" style="width: 80px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
                                 </div>
+                                <div class="vr-goto-time-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to time (HH:MM:SS)">
+                                    <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Time:</span>
+                                    <input type="text" id="vr-telemetry-goto-time" placeholder="00:00:00" title="Type time (HH:MM:SS) and press Enter to seek" style="width: 76px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
+                                </div>
 
                                 <!-- 2D / 360 Toggle Button -->
                                 <button id="vr-telemetry-toggle-flat" class="vr-control-btn active" type="button" title="Toggle 2D / 360 Spherical View" style="margin-left: 2px; font-size: 0.75rem; padding: 2px 7px; font-weight: 600; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; background: rgba(56,189,248,0.25);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span id="vr-telemetry-toggle-flat-text">2D</span></button>
@@ -944,6 +958,10 @@
                                 <div class="vr-goto-frame-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to frame number">
                                     <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Frame:</span>
                                     <input type="number" id="vr-vidstab-goto-frame" min="0" placeholder="Go to" title="Type frame number and press Enter to seek" style="width: 80px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
+                                </div>
+                                <div class="vr-goto-time-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to time (HH:MM:SS)">
+                                    <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Time:</span>
+                                    <input type="text" id="vr-vidstab-goto-time" placeholder="00:00:00" title="Type time (HH:MM:SS) and press Enter to seek" style="width: 76px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
                                 </div>
 
                                 <!-- 2D / 360 Toggle Button -->
@@ -991,6 +1009,10 @@
                                     <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Frame:</span>
                                     <input type="number" id="vr-kabsch-goto-frame" min="0" placeholder="Go to" title="Type frame number and press Enter to seek" style="width: 80px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
                                 </div>
+                                <div class="vr-goto-time-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to time (HH:MM:SS)">
+                                    <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Time:</span>
+                                    <input type="text" id="vr-kabsch-goto-time" placeholder="00:00:00" title="Type time (HH:MM:SS) and press Enter to seek" style="width: 76px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
+                                </div>
 
                                 <!-- 2D / 360 Toggle Button -->
                                 <button id="vr-kabsch-toggle-flat" class="vr-control-btn active" type="button" title="Toggle 2D / 360 Spherical View" style="margin-left: 2px; font-size: 0.75rem; padding: 2px 7px; font-weight: 600; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; background: rgba(56,189,248,0.25);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span id="vr-kabsch-toggle-flat-text">2D</span></button>
@@ -1037,6 +1059,10 @@
                                     <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Frame:</span>
                                     <input type="number" id="vr-kopf-goto-frame" min="0" placeholder="Go to" title="Type frame number and press Enter to seek" style="width: 80px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
                                 </div>
+                                <div class="vr-goto-time-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to time (HH:MM:SS)">
+                                    <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Time:</span>
+                                    <input type="text" id="vr-kopf-goto-time" placeholder="00:00:00" title="Type time (HH:MM:SS) and press Enter to seek" style="width: 76px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
+                                </div>
 
                                 <!-- 2D / 360 Toggle Button -->
                                 <button id="vr-kopf-toggle-flat" class="vr-control-btn active" type="button" title="Toggle 2D / 360 Spherical View" style="margin-left: 2px; font-size: 0.75rem; padding: 2px 7px; font-weight: 600; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; background: rgba(56,189,248,0.25);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span id="vr-kopf-toggle-flat-text">2D</span></button>
@@ -1082,6 +1108,10 @@
                                 <div class="vr-goto-frame-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to frame number">
                                     <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Frame:</span>
                                     <input type="number" id="vr-horizon-goto-frame" min="0" placeholder="Go to" title="Type frame number and press Enter to seek" style="width: 80px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
+                                </div>
+                                <div class="vr-goto-time-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to time (HH:MM:SS)">
+                                    <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Time:</span>
+                                    <input type="text" id="vr-horizon-goto-time" placeholder="00:00:00" title="Type time (HH:MM:SS) and press Enter to seek" style="width: 76px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
                                 </div>
 
                                 <!-- 2D / 360 Toggle Button -->
@@ -1130,6 +1160,10 @@
                                     <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Frame:</span>
                                     <input type="number" id="vr-cinematic-goto-frame" min="0" placeholder="Go to" title="Type frame number and press Enter to seek" style="width: 80px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
                                 </div>
+                                <div class="vr-goto-time-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to time (HH:MM:SS)">
+                                    <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Time:</span>
+                                    <input type="text" id="vr-cinematic-goto-time" placeholder="00:00:00" title="Type time (HH:MM:SS) and press Enter to seek" style="width: 76px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
+                                </div>
 
                                 <!-- 2D / 360 Toggle Button -->
                                 <button id="vr-cinematic-toggle-flat" class="vr-control-btn active" type="button" title="Toggle 2D / 360 Spherical View" style="margin-left: 2px; font-size: 0.75rem; padding: 2px 7px; font-weight: 600; color: #38bdf8; border: 1px solid #38bdf8; border-radius: 4px; display: inline-flex; align-items: center; gap: 3px; background: rgba(56,189,248,0.25);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg><span id="vr-cinematic-toggle-flat-text">2D</span></button>
@@ -1175,6 +1209,10 @@
                                 <div class="vr-goto-frame-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to frame number">
                                     <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Frame:</span>
                                     <input type="number" id="vr-traveldir-goto-frame" min="0" placeholder="Go to" title="Type frame number and press Enter to seek" style="width: 80px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
+                                </div>
+                                <div class="vr-goto-time-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to time (HH:MM:SS)">
+                                    <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Time:</span>
+                                    <input type="text" id="vr-traveldir-goto-time" placeholder="00:00:00" title="Type time (HH:MM:SS) and press Enter to seek" style="width: 76px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
                                 </div>
 
                                 <!-- 2D / 360 Toggle Button -->
@@ -1227,6 +1265,10 @@
                                 <div class="vr-goto-frame-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to frame number">
                                     <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Frame:</span>
                                     <input type="number" id="vr-goto-frame" min="0" placeholder="Go to" title="Type frame number and press Enter to seek" style="width: 80px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
+                                </div>
+                                <div class="vr-goto-time-container" style="display: flex; align-items: center; gap: 0.3rem; margin: 0 4px;" title="Jump to time (HH:MM:SS)">
+                                    <span style="font-size: 0.75rem; color: #cbd5e1; white-space: nowrap;">Time:</span>
+                                    <input type="text" id="vr-goto-time" placeholder="00:00:00" title="Type time (HH:MM:SS) and press Enter to seek" style="width: 76px; padding: 2px 4px; font-size: 0.78rem; background: rgba(15,23,42,0.85); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); border-radius: 4px; text-align: center;">
                                 </div>
                                 
                                 
