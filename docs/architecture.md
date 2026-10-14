@@ -90,7 +90,13 @@ The backend is built with **FastAPI** running on **Uvicorn**, organized into dom
 - **Pristine RAW Master Rendering (`scripts/pipeline.py`)**: The final mastering pass (`--master_from_raw`) chains Stitching, Cumulative Trajectory Stabilization (`sendcmd`), and Nadir branding directly from the original camera sensor RAW input in memory, eliminating second-generation compression loss and reducing disk I/O bottlenecks.
 - **Centralized RAM Disk & TempFS Discovery (`utils/temp_storage.py`)**: Automatically routes ephemeral motion vector files (`.trf`), dynamic transform scripts, and seam masks to `/dev/shm` on Linux or `RAMDISK_PATH` on Windows, completely eliminating SSD write endurance wear while strictly adhering to the repository's Absolute No-Deletion Policy.
 
-### 5. Automated Testing & Continuous Verification
+### 5. Camera Lens & Mount Inversion Architecture
+- **Lens Orientation Engine**:
+  - `normal` *(Default)*: Standard front-facing camera with Left half mapped to Front ($0^\circ$) and Right half mapped to Rear ($180^\circ$).
+  - `swap_lenses`: Dual-fisheye crop origin coordinates are inverted ($0 \leftrightarrow \text{half\_w}$) so that Right half maps to Front ($0^\circ$) and Left half to Rear ($180^\circ$). Suitable for cameras whose stream encodes the primary front sensor on the right half of the frame.
+  - `backwards_mount`: Applies optical crop inversion plus automatic sign inversion on IMU Pitch and Roll stabilization multipliers ($\times -1.0$) to compensate for a camera physically mounted $180^\circ$ rotated on a vehicle or tripod.
+
+### 6. Automated Testing & Continuous Verification
 - **Unit & Endpoint Suite**: Comprehensive automated test suites covering API endpoints, parameter parsing, path traversal defenses, math transforms, telemetry parser, temp storage resolver, and presets.
 - **Mockup End-to-End Testing**: `tests/pipeline/test_pipeline_e2e_mockup.py` renders synthetic dual-fisheye mockup clips (strictly $\le 2$ seconds), validating end-to-end pipeline execution and single-pass Stitch + Nadir integration.
 

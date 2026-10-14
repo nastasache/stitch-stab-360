@@ -136,3 +136,7 @@ In Mode 4 Hybrid, intermediate stages compute 3D rotational trajectories (sendcm
 
 ## [2026-09-23] Synchronized HH:MM:SS Time Inputs
 Added synchronized HH:MM:SS time input alongside frame number inputs across all 11 viewer containers and horizon editor with bidirectional seeking and lockstep updates.
+
+
+## [2026-10-14] Camera Lens Swap and Backwards Mount Support
+Added first-class support for cameras with inverted dual-fisheye lenses (Right=Front) and physically backwards mounts (180 deg rotated on vehicle/tripod) via --lens_orientation (normal, swap_lenses, backwards_mount). Instead of naive yaw shifting which breaks asymmetric lens calibration and auto-calibration optical flow, dual-fisheye crop origin coordinates are swapped (0 <-> half_w) at the raw input layer, keeping downstream unwarping, seam blending, and stabilization 100 percent intact. For backwards_mount, IMU pitch and roll multipliers are automatically negated (-1.0x) to compensate for the reversed physical accelerometer/gyroscope axes.

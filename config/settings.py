@@ -83,6 +83,7 @@ PIPELINE_DEFAULTS = {
     "roll": 0.0,
     "left_y_offset": 0.0,
     "rear_roll_offset": 0.0,
+    "lens_orientation": "normal",
     "blend_width": 200,
     "anti_vignette_angle": 0.785,
 

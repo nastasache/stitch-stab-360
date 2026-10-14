@@ -7,6 +7,7 @@
   "raw_rotation": "0",
   "left_y_offset": "0.00",
   "rear_roll_offset": "0.00",
+  "lens_orientation": "normal",
   "yaw": "0",
   "pitch": "0",
   "roll": "0",
@@ -95,5 +96,5 @@
   "remove_audio": false,
   "util_gcsv": false,
   "util_bigsh0t": false,
-  "saved_at": "2026-10-14T08:21:54.036841"
+  "saved_at": "2026-10-14T09:52:56.573606"
 }

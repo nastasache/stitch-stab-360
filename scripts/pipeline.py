@@ -2413,6 +2413,10 @@ def prepare_telemetry_sendcmd(args, out_base, duration, suffix="single", mode=No
     use_multiplier_r = multiplier_roll if multiplier_roll is not None else getattr(args, 'telemetry_multiplier_roll', mult_base)
     use_multiplier_p = multiplier_pitch if multiplier_pitch is not None else getattr(args, 'telemetry_multiplier_pitch', mult_base)
     use_multiplier_y = multiplier_yaw if multiplier_yaw is not None else getattr(args, 'telemetry_multiplier_yaw', mult_base)
+    if getattr(args, "lens_orientation", "normal") == "backwards_mount":
+        use_multiplier_r *= -1.0
+        use_multiplier_p *= -1.0
+        print("[Telemetry] Backwards mount compensation: Inverted IMU pitch and roll multiplier signs.")
     use_max_corr     = max_correction  # None = no clamping
     # NOTE: base_pitch, base_roll_l, base_roll_r are accepted but intentionally NOT baked into
     # the per-frame sendcmd values. FFmpeg v360 applies sendcmd corrections ADDITIVELY on top of
@@ -2633,6 +2637,9 @@ def main():
     parser.add_argument("--roll",         default=str(PIPELINE_DEFAULTS["roll"]), help="Roll correction (degrees)")
     parser.add_argument("--left_y_offset",default=str(PIPELINE_DEFAULTS["left_y_offset"]), help="Left lens vertical Y-offset (pixels)")
     parser.add_argument("--rear_roll_offset", default=str(PIPELINE_DEFAULTS["rear_roll_offset"]), help="Right lens independent roll offset (degrees)")
+    parser.add_argument("--lens_orientation", choices=["normal", "swap_lenses", "backwards_mount"], default=str(PIPELINE_DEFAULTS.get("lens_orientation", "normal")), help="Lens mount orientation: normal (Left=Front), swap_lenses (Right=Front), backwards_mount (Right=Front + Invert IMU Pitch/Roll)")
+    parser.add_argument("--swap_lenses", action="store_true", help="Swap left and right lenses (Right=Front, Left=Rear)")
+    parser.add_argument("--backwards_mount", action="store_true", help="Camera mounted physically backwards (Swap lenses + Invert IMU Pitch/Roll)")
     parser.add_argument("--preset", "--ffmpeg_preset", dest="preset", default=PIPELINE_DEFAULTS["ffmpeg_preset"], help="FFmpeg preset")
     parser.add_argument("--crf", "--ffmpeg_crf", dest="crf", type=str, default=str(PIPELINE_DEFAULTS["ffmpeg_crf"]), help="CRF quality value (18 = high quality)")
     parser.add_argument("--hwaccel", "--ffmpeg_hwaccel", dest="hwaccel", action="store_true", help="Use NVENC hardware acceleration")
@@ -2725,6 +2732,10 @@ def main():
     parser.add_argument("--keep_audio", action="store_false", dest="remove_audio", help="Keep audio in rendered output video")
 
     args = parser.parse_args()
+    if getattr(args, "backwards_mount", False):
+        args.lens_orientation = "backwards_mount"
+    elif getattr(args, "swap_lenses", False):
+        args.lens_orientation = "swap_lenses"
     _GLOBAL_ARGS = args
 
     if args.hwaccel:
@@ -3010,6 +3021,10 @@ def main():
         else:
             can_use_vulkan_stitch = False
 
+        is_swapped = getattr(args, "lens_orientation", "normal") in ("swap_lenses", "backwards_mount")
+        crop_x_front = half_w if is_swapped else 0
+        crop_x_rear  = 0 if is_swapped else half_w
+
         if use_split_lenses and mask_file and os.path.exists(mask_file):
             filter_complex = f"{raw_rot_filter}{raw_in_label}split[raw_l][raw_r];"
             if left_y_offset != 0:
@@ -3018,18 +3033,18 @@ def main():
                 left_pad_y   = max(0, -left_y_offset)
                 left_recrop_y= max(0,  left_y_offset)
                 filter_complex += (
-                    f"[raw_l]crop={half_w}:{half_h}:0:0,"
+                    f"[raw_l]crop={half_w}:{half_h}:{crop_x_front}:0,"
                     f"pad={half_w}:{pad_h}:0:{left_pad_y}:black,"
                     f"crop={half_w}:{half_h}:0:{left_recrop_y}"
                 )
             else:
-                filter_complex += f"[raw_l]crop={half_w}:{half_h}:0:0"
+                filter_complex += f"[raw_l]crop={half_w}:{half_h}:{crop_x_front}:0"
                 
             if args.anti_vignette:
                 filter_complex += f",vignette=mode=backward:angle={args.anti_vignette_angle},format=yuv420p"
             filter_complex += "[left];"
 
-            filter_complex += f"[raw_r]crop={half_w}:{half_h}:{half_w}:0"
+            filter_complex += f"[raw_r]crop={half_w}:{half_h}:{crop_x_rear}:0"
             if args.anti_vignette:
                 filter_complex += f",vignette=mode=backward:angle={args.anti_vignette_angle},format=yuv420p"
             filter_complex += "[right];"
@@ -3160,19 +3175,25 @@ def main():
                     f":yaw={yaw_dfisheye}:pitch={args.pitch}:roll={args.roll}"
                 )
 
-            if left_y_offset != 0:
+            crop_1920_front = 1920 if is_swapped else 0
+            crop_1920_rear  = 0 if is_swapped else 1920
+
+            if left_y_offset != 0 or is_swapped:
                 abs_offset   = abs(left_y_offset)
                 pad_h        = 1920 + abs_offset
                 left_pad_y   = max(0, -left_y_offset)
                 left_recrop_y= max(0,  left_y_offset)
                 
                 filter_complex = f"{raw_rot_filter}{raw_in_label}split[a][b];"
-                filter_complex += f"[a]crop=1920:1920:0:0,pad=1920:{pad_h}:0:{left_pad_y}:black,crop=1920:1920:0:{left_recrop_y}"
+                if left_y_offset != 0:
+                    filter_complex += f"[a]crop=1920:1920:{crop_1920_front}:0,pad=1920:{pad_h}:0:{left_pad_y}:black,crop=1920:1920:0:{left_recrop_y}"
+                else:
+                    filter_complex += f"[a]crop=1920:1920:{crop_1920_front}:0"
                 if args.anti_vignette:
                     filter_complex += f",vignette=mode=backward:angle={args.anti_vignette_angle}"
                 filter_complex += f"[left];"
                 
-                filter_complex += f"[b]crop=1920:1920:1920:0"
+                filter_complex += f"[b]crop=1920:1920:{crop_1920_rear}:0"
                 if args.anti_vignette:
                     filter_complex += f",vignette=mode=backward:angle={args.anti_vignette_angle}"
                 filter_complex += f"[right];"

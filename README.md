@@ -235,6 +235,7 @@ python -B scripts/pipeline.py --help
 ## ⚙️ Core Features & Architecture
 
 * **Dual-Fisheye Cropping & Remapping**: Custom FOV, yaw/pitch/roll orientation, anti-vignette shading, seam blending, and GPU-accelerated compute shaders via **Vulkan** (`--v360_backend=vulkan` with `v360_vulkan`).
+* **Lens & Mount Inversion Engine**: First-class support for cameras with inverted lenses (Right lens as Front) and physically backwards mounts ($180^\circ$ rotated on vehicle/tripod) via `--lens_orientation` (`normal`, `swap_lenses`, `backwards_mount`), automatically adjusting crop origins and compensating IMU pitch/roll signs without workflow disruption.
 * **Memory & In-RAM Filter Chaining (Pristine Video Mastering)**:
   * **Single-Pass Step 1 Chaining**: When stabilization is disabled or purely telemetry-driven, Stitching and Nadir branding are composed in a single FFmpeg filtergraph in RAM, eliminating 5–15 GB intermediate video files and redundant re-encodes.
   * **Pristine RAW Master Rendering (`--master_from_raw`)**: Master render passes chain directly from original RAW sensor pixels in memory, eliminating second-generation compression loss and delivering pristine 1st-generation clarity.

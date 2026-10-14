@@ -23,3 +23,8 @@ Updated resolveVideoSrc in app.js and sanitizeMediaUrl in horizon_editor.html to
 
 ## [2026-09-21] defusedxml Parser vs Standard XML Tree Builder
 defusedxml.ElementTree is designed solely for safe parsing and explicitly omits tree building factories such as Element and SubElement. Attempting to build XML DOM trees using defusedxml raises AttributeError: module 'defusedxml.ElementTree' has no attribute 'Element'. Construction of XML nodes (e.g. in GPX/KML exporters) must use standard xml.etree.ElementTree, reserving defusedxml strictly for untrusted input parsing.
+
+
+## [2026-10-14] Camera Lens Inversion & Backwards Mount Sensor Coordinates
+Using `Yaw = 180°` to correct an inverted camera visually breaks asymmetric lens calibration offsets (`left_y_offset` shifts rear, `rear_roll_offset` rolls front) and corrupts optical flow heading detection in auto-calibration (focus of expansion becomes contraction). Swapping crop origin coordinates (`0` vs `half_w`) at the dual-fisheye input stage preserves standard coordinate conventions and downstream math completely intact. Furthermore, when a camera is physically mounted backwards ($180^\circ$ around the vertical axis), the physical $+Z$ axis still points straight UP (so angular yaw rates maintain sign), while physical pitch and roll axes are negated relative to the vehicle's forward travel vector, requiring exact $-1.0\times$ compensation on IMU pitch and roll stabilization multipliers.
+

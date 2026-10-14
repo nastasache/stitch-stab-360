@@ -300,7 +300,7 @@ def filter_tree_and_pole_lines(equirect_bgr, lines_flat):
         
     return weighted_lines
 
-def estimate_rotation_and_horizon(frame_pairs, fov_deg=190.00, left_y_offset=0.00, rear_roll_offset=0.00, video_path=None):
+def estimate_rotation_and_horizon(frame_pairs, fov_deg=190.00, left_y_offset=0.00, rear_roll_offset=0.00, video_path=None, lens_orientation="normal"):
     """Estimate corrective Pitch, Roll, and Yaw angles matching FFmpeg v360 conventions.
 
     Fuses visual sky/ground horizon elevation, pole verticality consensus,
@@ -312,6 +312,7 @@ def estimate_rotation_and_horizon(frame_pairs, fov_deg=190.00, left_y_offset=0.0
         left_y_offset: Vertical offset for left lens.
         rear_roll_offset: Rear lens roll offset in degrees.
         video_path: Optional path to source video for companion telemetry inspection.
+        lens_orientation: Lens/mount orientation ('normal', 'swap_lenses', 'backwards_mount').
 
     Returns:
         tuple[float, float, float]: Corrective (yaw, pitch, roll) angles in degrees.
@@ -324,6 +325,9 @@ def estimate_rotation_and_horizon(frame_pairs, fov_deg=190.00, left_y_offset=0.0
     if video_path:
         tel_pitch, tel_roll = extract_telemetry_orientation(video_path)
         if tel_pitch is not None and tel_roll is not None:
+            if lens_orientation == "backwards_mount":
+                tel_pitch = -tel_pitch
+                tel_roll = -tel_roll
             return round(float(yaw_corr), 2), round(float(tel_pitch), 2), round(float(tel_roll), 2)
             
     if not frame_pairs:
@@ -649,7 +653,7 @@ def extract_video_calibration_frames(video_path, preview_time=None, num_frames=5
             
     return sorted(list(set(frame_files)))
 
-def calibrate_frames_dataset(frame_pairs, mode="balanced", video_path=None, auto_level_only=False, init_fov=190.00, init_y_offset=0.00, init_rear_roll=0.00):
+def calibrate_frames_dataset(frame_pairs, mode="balanced", video_path=None, auto_level_only=False, init_fov=190.00, init_y_offset=0.00, init_rear_roll=0.00, lens_orientation="normal"):
     """Execute multi-frame consensus calibration optimizer and horizon evaluator.
 
     Args:
@@ -660,6 +664,7 @@ def calibrate_frames_dataset(frame_pairs, mode="balanced", video_path=None, auto
         init_fov: Initial FOV estimate in degrees.
         init_y_offset: Initial front lens vertical shift in pixels.
         init_rear_roll: Initial rear lens roll adjustment in degrees.
+        lens_orientation: Lens/mount orientation ('normal', 'swap_lenses', 'backwards_mount').
 
     Returns:
         dict: Calibration result dictionary containing FOVs, offsets, horizon corrections,
@@ -671,7 +676,7 @@ def calibrate_frames_dataset(frame_pairs, mode="balanced", video_path=None, auto
     # Standalone quick horizon/rotation leveling mode
     if auto_level_only:
         yaw_corr, pitch_corr, roll_corr = estimate_rotation_and_horizon(
-            frame_pairs, fov_deg=init_fov, left_y_offset=init_y_offset, rear_roll_offset=init_rear_roll, video_path=video_path
+            frame_pairs, fov_deg=init_fov, left_y_offset=init_y_offset, rear_roll_offset=init_rear_roll, video_path=video_path, lens_orientation=lens_orientation
         )
         return {
             "status": "success",
@@ -876,7 +881,8 @@ def calibrate_frames_dataset(frame_pairs, mode="balanced", video_path=None, auto
         fov_deg=best_params["ih_fov"],
         left_y_offset=best_params["left_y_offset"],
         rear_roll_offset=best_params["rear_roll_offset"],
-        video_path=video_path
+        video_path=video_path,
+        lens_orientation=lens_orientation
     )
         
     return {
@@ -894,7 +900,7 @@ def calibrate_frames_dataset(frame_pairs, mode="balanced", video_path=None, auto
         "message": detail_msg
     }
 
-def calibrate_image(img_path, mode="balanced", auto_level_only=False, init_fov=190.00, init_y_offset=0.00, init_rear_roll=0.00):
+def calibrate_image(img_path, mode="balanced", auto_level_only=False, init_fov=190.00, init_y_offset=0.00, init_rear_roll=0.00, lens_orientation="normal"):
     """Calibrate stitching parameters from a single dual-fisheye image file.
 
     Args:
@@ -904,6 +910,7 @@ def calibrate_image(img_path, mode="balanced", auto_level_only=False, init_fov=1
         init_fov: Initial FOV estimate in degrees.
         init_y_offset: Initial left lens vertical shift in pixels.
         init_rear_roll: Initial rear lens roll adjustment in degrees.
+        lens_orientation: Lens/mount orientation ('normal', 'swap_lenses', 'backwards_mount').
 
     Returns:
         dict: Calibration result dictionary.
@@ -915,13 +922,16 @@ def calibrate_image(img_path, mode="balanced", auto_level_only=False, init_fov=1
         return {"status": "error", "message": f"Failed to decode image: {img_path}"}
     h, w = img.shape[:2]
     half_w = w // 2
+    is_swapped = lens_orientation in ("swap_lenses", "backwards_mount")
+    pair = (img[:, half_w:], img[:, :half_w]) if is_swapped else (img[:, :half_w], img[:, half_w:])
     return calibrate_frames_dataset(
-        [(img[:, :half_w], img[:, half_w:])],
+        [pair],
         mode=mode, auto_level_only=auto_level_only,
-        init_fov=init_fov, init_y_offset=init_y_offset, init_rear_roll=init_rear_roll
+        init_fov=init_fov, init_y_offset=init_y_offset, init_rear_roll=init_rear_roll,
+        lens_orientation=lens_orientation
     )
 
-def calibrate_video(video_path, preview_time=None, num_frames=5, mode="balanced", auto_level_only=False, init_fov=190.00, init_y_offset=0.00, init_rear_roll=0.00):
+def calibrate_video(video_path, preview_time=None, num_frames=5, mode="balanced", auto_level_only=False, init_fov=190.00, init_y_offset=0.00, init_rear_roll=0.00, lens_orientation="normal"):
     """Extract representative frames and perform joint multi-frame auto-calibration.
 
     Args:
@@ -933,6 +943,7 @@ def calibrate_video(video_path, preview_time=None, num_frames=5, mode="balanced"
         init_fov: Initial FOV estimate in degrees.
         init_y_offset: Initial left lens vertical shift in pixels.
         init_rear_roll: Initial rear lens roll adjustment in degrees.
+        lens_orientation: Lens/mount orientation ('normal', 'swap_lenses', 'backwards_mount').
 
     Returns:
         dict: Calibration result dictionary.
@@ -944,20 +955,23 @@ def calibrate_video(video_path, preview_time=None, num_frames=5, mode="balanced"
     if not frame_files:
         return {"status": "error", "message": "Failed to extract calibration frames from video."}
         
+    is_swapped = lens_orientation in ("swap_lenses", "backwards_mount")
     frame_pairs = []
     for ff in frame_files:
         img = cv2.imread(ff)
         if img is not None:
             h, w = img.shape[:2]
             half_w = w // 2
-            frame_pairs.append((img[:, :half_w], img[:, half_w:]))
+            pair = (img[:, half_w:], img[:, :half_w]) if is_swapped else (img[:, :half_w], img[:, half_w:])
+            frame_pairs.append(pair)
             
     if not frame_pairs:
         return {"status": "error", "message": "Failed to decode extracted video frames."}
         
     return calibrate_frames_dataset(
         frame_pairs, mode=mode, video_path=video_path, auto_level_only=auto_level_only,
-        init_fov=init_fov, init_y_offset=init_y_offset, init_rear_roll=init_rear_roll
+        init_fov=init_fov, init_y_offset=init_y_offset, init_rear_roll=init_rear_roll,
+        lens_orientation=lens_orientation
     )
 
 def main():
@@ -973,30 +987,43 @@ def main():
     parser.add_argument("--init_fov", type=float, default=190.00, help="Initial FOV for quick horizon leveling")
     parser.add_argument("--init_left_y", type=float, default=0.00, help="Initial left lens Y offset for quick horizon leveling")
     parser.add_argument("--init_rear_roll", type=float, default=0.00, help="Initial rear roll offset for quick horizon leveling")
+    parser.add_argument("--lens_orientation", choices=["normal", "swap_lenses", "backwards_mount"], default="normal", help="Lens mount orientation: normal (Left=Front), swap_lenses (Right=Front), backwards_mount (Right=Front + Invert IMU Pitch/Roll)")
+    parser.add_argument("--swap_lenses", action="store_true", help="Swap left and right lenses (Right=Front, Left=Rear)")
+    parser.add_argument("--backwards_mount", action="store_true", help="Camera mounted physically backwards (Swap lenses + Invert IMU Pitch/Roll)")
     parser.add_argument("--json", action="store_true", help="Output results strictly as JSON")
     args = parser.parse_args()
+
+    if args.backwards_mount:
+        args.lens_orientation = "backwards_mount"
+    elif args.swap_lenses:
+        args.lens_orientation = "swap_lenses"
     
     if args.video:
         result = calibrate_video(
             args.video, preview_time=args.preview_time, num_frames=args.num_frames, mode=args.mode,
-            auto_level_only=args.auto_level, init_fov=args.init_fov, init_y_offset=args.init_left_y, init_rear_roll=args.init_rear_roll
+            auto_level_only=args.auto_level, init_fov=args.init_fov, init_y_offset=args.init_left_y, init_rear_roll=args.init_rear_roll,
+            lens_orientation=args.lens_orientation
         )
     elif args.images:
+        is_swapped = args.lens_orientation in ("swap_lenses", "backwards_mount")
         frame_pairs = []
         for img_p in args.images:
             img = cv2.imread(img_p)
             if img is not None:
                 h, w = img.shape[:2]
                 half_w = w // 2
-                frame_pairs.append((img[:, :half_w], img[:, half_w:]))
+                pair = (img[:, half_w:], img[:, :half_w]) if is_swapped else (img[:, :half_w], img[:, half_w:])
+                frame_pairs.append(pair)
         result = calibrate_frames_dataset(
             frame_pairs, mode=args.mode, auto_level_only=args.auto_level,
-            init_fov=args.init_fov, init_y_offset=args.init_left_y, init_rear_roll=args.init_rear_roll
+            init_fov=args.init_fov, init_y_offset=args.init_left_y, init_rear_roll=args.init_rear_roll,
+            lens_orientation=args.lens_orientation
         )
     elif args.image:
         result = calibrate_image(
             args.image, mode=args.mode, auto_level_only=args.auto_level,
-            init_fov=args.init_fov, init_y_offset=args.init_left_y, init_rear_roll=args.init_rear_roll
+            init_fov=args.init_fov, init_y_offset=args.init_left_y, init_rear_roll=args.init_rear_roll,
+            lens_orientation=args.lens_orientation
         )
     else:
         result = {"status": "error", "message": "Specify --video, --images, or --image"}

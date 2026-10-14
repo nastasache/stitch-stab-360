@@ -42,6 +42,7 @@ const APP_CONFIG = {
         roll: '0',
         left_y_offset: '0.00',
         rear_roll_offset: '0.00',
+        lens_orientation: 'normal',
         blend_width: '200',
         anti_vignette_angle: '0.785',
         ffmpeg_preset: 'medium',
@@ -869,6 +870,7 @@ function collectPipelineConfig() {
         raw_rotation: document.getElementById('raw_rotation_val')?.value ?? document.getElementById('raw_rotation')?.value ?? '0',
         left_y_offset: document.getElementById('left_y_offset_val')?.value ?? document.getElementById('left_y_offset')?.value ?? '0.00',
         rear_roll_offset: document.getElementById('rear_roll_offset_val')?.value ?? document.getElementById('rear_roll_offset')?.value ?? '0.00',
+        lens_orientation: document.getElementById('lens_orientation')?.value ?? 'normal',
         yaw: document.getElementById('yaw_val')?.value ?? document.getElementById('yaw')?.value ?? '-25',
         pitch: document.getElementById('pitch_val')?.value ?? document.getElementById('pitch')?.value ?? '-10',
         roll: document.getElementById('roll_val')?.value ?? document.getElementById('roll')?.value ?? '5',
@@ -1026,6 +1028,10 @@ function applyPipelineConfig(cfg, showToastName = '') {
     }
     if (d.left_y_offset !== undefined) setSliderAndInputValue('left_y_offset', 'left_y_offset_val', d.left_y_offset);
     if (d.rear_roll_offset !== undefined) setSliderAndInputValue('rear_roll_offset', 'rear_roll_offset_val', d.rear_roll_offset);
+    if (d.lens_orientation !== undefined) {
+        const loEl = document.getElementById('lens_orientation');
+        if (loEl) loEl.value = d.lens_orientation;
+    }
     if (d.yaw !== undefined) setSliderAndInputValue('yaw', 'yaw_val', d.yaw);
     if (d.pitch !== undefined) setSliderAndInputValue('pitch', 'pitch_val', d.pitch);
     if (d.roll !== undefined) setSliderAndInputValue('roll', 'roll_val', d.roll);
@@ -1595,6 +1601,13 @@ function init() {
                 if (rawValInput) rawValInput.value = chosen;
                 generatePreview();
             }
+        });
+    }
+
+    const lensOrientationSelect = document.getElementById('lens_orientation');
+    if (lensOrientationSelect) {
+        lensOrientationSelect.addEventListener('change', () => {
+            generatePreview();
         });
     }
 
@@ -4015,6 +4028,7 @@ async function autoCalibrateStitching() {
     formData.append('preview_time', playheadTime);
     formData.append('calib_mode', calibMode);
     formData.append('num_frames', String(numFrames));
+    formData.append('lens_orientation', document.getElementById('lens_orientation')?.value ?? 'normal');
 
     const timeoutMs = Math.max(180000, numFrames * 8000);
     const timeoutId = setTimeout(() => {
@@ -4169,6 +4183,7 @@ async function generatePreview() {
     formData.append('roll', readNumberInput('roll_val', 'roll', String(APP_CONFIG.pipeline_defaults.roll)));
     formData.append('left_y_offset', readNumberInput('left_y_offset_val', 'left_y_offset', String(APP_CONFIG.pipeline_defaults.left_y_offset)));
     formData.append('rear_roll_offset', readNumberInput('rear_roll_offset_val', 'rear_roll_offset', String(APP_CONFIG.pipeline_defaults.rear_roll_offset)));
+    formData.append('lens_orientation', document.getElementById('lens_orientation')?.value ?? 'normal');
     formData.append('blend_seams', cb('blend_seams'));
     formData.append('blend_width', readNumberInput('blend_width_val', 'blend_width', String(APP_CONFIG.pipeline_defaults.blend_width)));
     formData.append('anti_vignette', antiVignetteCb && antiVignetteCb.checked ? '1' : '0');
@@ -4304,6 +4319,7 @@ function buildStitchFormData(outputOverride, durationOverride) {
     bodyData.append('roll',          readNumberInput('roll_val', 'roll', String(APP_CONFIG.pipeline_defaults.roll)));
     bodyData.append('left_y_offset', readNumberInput('left_y_offset_val', 'left_y_offset', String(APP_CONFIG.pipeline_defaults.left_y_offset)));
     bodyData.append('rear_roll_offset', readNumberInput('rear_roll_offset_val', 'rear_roll_offset', String(APP_CONFIG.pipeline_defaults.rear_roll_offset)));
+    bodyData.append('lens_orientation', document.getElementById('lens_orientation')?.value ?? 'normal');
     bodyData.append('ffmpeg_preset', options.ffmpeg_preset.value);
     bodyData.append('ffmpeg_crf',     options.ffmpeg_crf.value);
     bodyData.append('ffmpeg_hwaccel', options.ffmpeg_hwaccel.checked ? '1' : '0');

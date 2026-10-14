@@ -14,7 +14,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request, Query
 from fastapi.responses import JSONResponse
 
-from config.settings import BASE_DIR
+from config.settings import BASE_DIR, PIPELINE_DEFAULTS
 from routers.common import (
     resolve_input_file,
     resolve_output_file,
@@ -419,20 +419,21 @@ async def _calibrate_handler(request: Request, mode: str):
     ih_fov      = float(gp("ih_fov", "190.00"))
     left_y      = float(gp("left_y_offset", "0.00"))
     rear_roll   = float(gp("rear_roll_offset", "0.00"))
+    lens_orientation = str(gp("lens_orientation", PIPELINE_DEFAULTS.get("lens_orientation", "normal")))
 
     ext = Path(input_name).suffix.lower().lstrip(".")
     is_video = ext in ["mp4", "mov", "mkv", "avi", "webm", "m4v"]
 
     if mode == "auto_level":
         if is_video:
-            calib_cmd = [sys.executable, "-B", "scripts/auto_calibrate.py", "--video", input_name, "--preview_time", str(preview_time), "--num_frames", "1", "--auto_level", "--init_fov", str(ih_fov), "--init_left_y", str(left_y), "--init_rear_roll", str(rear_roll), "--json"]
+            calib_cmd = [sys.executable, "-B", "scripts/auto_calibrate.py", "--video", input_name, "--preview_time", str(preview_time), "--num_frames", "1", "--auto_level", "--init_fov", str(ih_fov), "--init_left_y", str(left_y), "--init_rear_roll", str(rear_roll), "--lens_orientation", lens_orientation, "--json"]
         else:
-            calib_cmd = [sys.executable, "-B", "scripts/auto_calibrate.py", "--image", frame_file, "--auto_level", "--init_fov", str(ih_fov), "--init_left_y", str(left_y), "--init_rear_roll", str(rear_roll), "--json"]
+            calib_cmd = [sys.executable, "-B", "scripts/auto_calibrate.py", "--image", frame_file, "--auto_level", "--init_fov", str(ih_fov), "--init_left_y", str(left_y), "--init_rear_roll", str(rear_roll), "--lens_orientation", lens_orientation, "--json"]
     else:
         if is_video:
-            calib_cmd = [sys.executable, "-B", "scripts/auto_calibrate.py", "--video", input_name, "--preview_time", str(preview_time), "--num_frames", str(num_frames), "--mode", calib_mode, "--json"]
+            calib_cmd = [sys.executable, "-B", "scripts/auto_calibrate.py", "--video", input_name, "--preview_time", str(preview_time), "--num_frames", str(num_frames), "--mode", calib_mode, "--lens_orientation", lens_orientation, "--json"]
         else:
-            calib_cmd = [sys.executable, "-B", "scripts/auto_calibrate.py", "--image", frame_file, "--mode", calib_mode, "--json"]
+            calib_cmd = [sys.executable, "-B", "scripts/auto_calibrate.py", "--image", frame_file, "--mode", calib_mode, "--lens_orientation", lens_orientation, "--json"]
 
     stdout, stderr = await run_async_subprocess(*calib_cmd)
     output_str = stdout.decode("utf-8", errors="ignore")
@@ -480,6 +481,10 @@ async def api_preview(request: Request):
     roll            = float(gp("roll", "0"))
     left_y_offset   = int(float(gp("left_y_offset", "0")))
     rear_roll_offset= float(gp("rear_roll_offset", "0"))
+    lens_orientation = str(gp("lens_orientation", PIPELINE_DEFAULTS.get("lens_orientation", "normal")))
+    is_swapped      = lens_orientation in ("swap_lenses", "backwards_mount")
+    crop_x_front    = 1920 if is_swapped else 0
+    crop_x_rear     = 0 if is_swapped else 1920
     blend_seams     = (str(gp("blend_seams", "1")) == "1" or str(gp("blend_seams", "")).lower() == "true")
     anti_vignette   = (str(gp("anti_vignette", "0")) == "1" or str(gp("anti_vignette", "")).lower() == "true")
     anti_vignette_angle = float(gp("anti_vignette_angle", "0.785"))
@@ -570,13 +575,13 @@ async def api_preview(request: Request):
                     pad_h         = 1920 + abs_offset
                     left_pad_y    = max(0, -left_y_offset)
                     left_recrop_y = max(0, left_y_offset)
-                    filter_complex += f"[raw_l]crop=1920:1920:0:0,pad=1920:{pad_h}:0:{left_pad_y}:black,crop=1920:1920:0:{left_recrop_y}"
+                    filter_complex += f"[raw_l]crop=1920:1920:{crop_x_front}:0,pad=1920:{pad_h}:0:{left_pad_y}:black,crop=1920:1920:0:{left_recrop_y}"
                 else:
-                    filter_complex += "[raw_l]crop=1920:1920:0:0"
+                    filter_complex += f"[raw_l]crop=1920:1920:{crop_x_front}:0"
                 if anti_vignette:
                     filter_complex += f",vignette=mode=backward:angle={anti_vignette_angle},format=yuv420p"
                 filter_complex += "[left];"
-                filter_complex += "[raw_r]crop=1920:1920:1920:0"
+                filter_complex += f"[raw_r]crop=1920:1920:{crop_x_rear}:0"
                 if anti_vignette:
                     filter_complex += f",vignette=mode=backward:angle={anti_vignette_angle},format=yuv420p"
                 filter_complex += "[right];"
@@ -603,12 +608,13 @@ async def api_preview(request: Request):
             while yaw_dfisheye > 180:  yaw_dfisheye -= 360
             while yaw_dfisheye < -180: yaw_dfisheye += 360
 
-            if left_y_offset != 0:
+            if left_y_offset != 0 or is_swapped:
                 abs_offset    = abs(left_y_offset)
                 pad_h         = 1920 + abs_offset
                 left_pad_y    = max(0, -left_y_offset)
                 left_recrop_y = max(0, left_y_offset)
-                filter_complex = f"[0:v]split[a][b];[a]crop=1920:1920:0:0,pad=1920:{pad_h}:0:{left_pad_y}:black,crop=1920:1920:0:{left_recrop_y}[left];[b]crop=1920:1920:1920:0[right];[left][right]hstack[combined];[combined]v360=input=dfisheye:output=equirect:ih_fov={ih_fov}:iv_fov={iv_fov}:yaw={yaw_dfisheye}:pitch={pitch}:roll={roll}[eq]"
+                crop_l_expr   = f"[a]crop=1920:1920:{crop_x_front}:0,pad=1920:{pad_h}:0:{left_pad_y}:black,crop=1920:1920:0:{left_recrop_y}[left]" if left_y_offset != 0 else f"[a]crop=1920:1920:{crop_x_front}:0[left]"
+                filter_complex = f"[0:v]split[a][b];{crop_l_expr};[b]crop=1920:1920:{crop_x_rear}:0[right];[left][right]hstack[combined];[combined]v360=input=dfisheye:output=equirect:ih_fov={ih_fov}:iv_fov={iv_fov}:yaw={yaw_dfisheye}:pitch={pitch}:roll={roll}[eq]"
             else:
                 filter_complex = f"[0:v]v360=input=dfisheye:output=equirect:ih_fov={ih_fov}:iv_fov={iv_fov}:yaw={yaw_dfisheye}:pitch={pitch}:roll={roll}[eq]"
 
